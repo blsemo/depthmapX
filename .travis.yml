@@ -16,9 +16,12 @@ install:
 jobs:
     include:
         - stage: build
-          script: source /opt/qt57/bin/qt57-env.sh && mkdir build && cd build && /opt/qt57/bin/qmake ../depthmapX.pro &&  make
+          script: 
+            - source /opt/qt57/bin/qt57-env.sh
+            - mkdir build && cd build 
+            - /opt/qt57/bin/qmake ../depthmapX.pro &&  make
         - stage: unittest
-          script: ./cliTest/cliTest && ./GuiUnitTest/GuiUnitTest && ./salaTest/salaTest
-        - script: cd ../RegressionTest && python3.5 test_main.py 
+          script: cd build && ./cliTest/cliTest && ./GuiUnitTest/GuiUnitTest && ./salaTest/salaTest
+        - script: cd RegressionTest && python3.5 test_main.py 
         - stage: regressiontest
-        - script: python3.5 RegressionTestRunner.py
+          script: cd RegressionTest && python3.5 RegressionTestRunner.py
