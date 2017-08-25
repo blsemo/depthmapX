@@ -1889,7 +1889,8 @@ void QGraphDoc::OnPushToLayer()
       int toplayerclass = (m_meta_graph->getViewClass() & MetaGraph::VIEWFRONT);
       std::string origin_layer;
       std::string origin_attribute;
-      pqmap<IntPair,std::string> names;
+      std::map<std::pair<int,int>, std::string> names;
+
       // I'm just going to allow push from any layer to any other layer
       // (apart from VGA graphs, which cannot map onto themselves
       if (toplayerclass == MetaGraph::VIEWVGA) {
@@ -1920,32 +1921,28 @@ void QGraphDoc::OnPushToLayer()
       ShapeMaps<ShapeMap>& datamaps = m_meta_graph->getDataMaps();
       for (i = 0; i < datamaps.getMapCount(); i++) {
          if (toplayerclass != MetaGraph::VIEWDATA || i != datamaps.getDisplayedMapRef()) {
-            names.add(IntPair(MetaGraph::VIEWDATA,int(i)),std::string("Data Maps: ") + datamaps.getMap(i).getName());
+            names[make_pair(MetaGraph::VIEWDATA,int(i))] = std::string("Data Maps: ") + datamaps.getMap(i).getName();
          }
       }
       ShapeGraphs& shapegraphs = m_meta_graph->getShapeGraphs();
       for (i = 0; i < shapegraphs.getMapCount(); i++) {
          if (toplayerclass != MetaGraph::VIEWAXIAL || i != shapegraphs.getDisplayedMapRef()) {
-            names.add(IntPair(MetaGraph::VIEWAXIAL,int(i)),std::string("Shape Graphs: ") + shapegraphs.getMap(i).getName());
+            names[make_pair(MetaGraph::VIEWAXIAL,int(i))] = std::string("Shape Graphs: ") + shapegraphs.getMap(i).getName();
          }
       }
       for (i = 0; i < m_meta_graph->PointMaps::size(); i++) {
          // note 1: no VGA graph can push to another VGA graph (point onto point transforms)
          // note 2: I simply haven't written "axial" -> vga yet, not that it can't be possible (e.g., "axial" could actually be a convex map)
          if (toplayerclass != MetaGraph::VIEWVGA && toplayerclass != MetaGraph::VIEWAXIAL) {
-            names.add(IntPair(MetaGraph::VIEWVGA,int(i)),std::string("Visibility Graphs: ") + m_meta_graph->PointMaps::at(i).getName());
+            names[make_pair(MetaGraph::VIEWVGA,int(i))] = std::string("Visibility Graphs: ") + m_meta_graph->PointMaps::at(i).getName();
          }
       }
-      CPushDialog dlg(names);
-      dlg.m_origin_layer = QString(origin_layer.c_str());
-      dlg.m_origin_attribute = QString(origin_attribute.c_str());
+      CPushDialog dlg(names, origin_layer, origin_attribute);
 	  if (QDialog::Accepted == dlg.exec()) {
          m_communicator = new CMSCommunicator;   // dummy value to prevent draw while this operation is in progress
          // now have to separate vga and axial layers again:
-         int sel = dlg.m_layer_selection;
-         IntPair dest = names.key(sel);
-//         CWaitCursor c;
-         m_meta_graph->pushValuesToLayer(dest.a, dest.b, dlg.m_function, dlg.m_count_intersections);
+         auto dest = dlg.getSelection();
+         m_meta_graph->pushValuesToLayer(dest.first, dest.second, dlg.m_function, dlg.m_count_intersections);
          delete m_communicator;
          m_communicator = NULL;
          SetUpdateFlag(NEW_TABLE);

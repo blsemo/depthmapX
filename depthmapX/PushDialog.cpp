@@ -15,21 +15,30 @@
 
 #include "PushDialog.h"
 
-CPushDialog::CPushDialog(pqmap<IntPair,std::string>& names, QWidget *parent)
-: QDialog(parent)
+CPushDialog::CPushDialog(const DestNameMap& names, const std::string& origin_layer, const std::string& origin_attribute, QWidget *parent)
+    : QDialog(parent), m_names(names), m_origin_layer(origin_layer.c_str()), m_origin_attribute(origin_attribute.c_str()), invalid_selection(std::make_pair(-1,-1))
 {
 	setupUi(this);
 	m_layer_selection = -1;
-	m_origin_attribute = tr("");
-	m_origin_layer = tr("");
 	m_count_intersections = false;
 	m_function = -1;
 
-	m_function = 0;
+    m_function = 0;
+}
 
-	for (size_t i = 0; i < names.size(); i++) {
-		m_names.push_back(names.value(i));
-	}
+
+const std::pair<int, int>& CPushDialog::getSelection() const
+{
+    if (m_layer_selection >=0 )
+    {
+        auto iter = m_names.begin();
+        for (auto i = 0; i < m_layer_selection; ++i)
+        {
+            ++iter;
+        }
+        return iter->first;
+    }
+    return invalid_selection;
 }
 
 void CPushDialog::OnOK()
@@ -71,9 +80,10 @@ void CPushDialog::UpdateData(bool value)
 
 void CPushDialog::showEvent(QShowEvent * event)
 {
-	for (size_t i = 0; i < m_names.size(); i++) {
-		c_layer_selector->addItem(QString(m_names[i].c_str()));
-	}
+    for (auto item : m_names)
+    {
+        c_layer_selector->addItem(QString(item.second.c_str()));
+    }
 	c_layer_selector->setCurrentIndex(0);
 
 	UpdateData(false);
