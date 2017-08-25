@@ -186,10 +186,10 @@ void Q3DView::timerEvent(QTimerEvent *event)
                      PixelRef pix = pointmap.pixelate(p); // note, take the pix before you scale!
                      p.normalScale(m_region);
                      m_mannequins[i].advance(p);
-                     size_t x = m_pixels.searchindex(pix);
-                     if (x != paftl::npos) {
-                        if (m_pixels[x].m_value < 10) {
-                           m_pixels[x].m_value += 1;
+                     auto x = m_pixels.find(pix);
+                     if (x != m_pixels.end()) {
+                        if (x->second.m_value < 10) {
+                           x->second.m_value += 1;
                         }
                      }
                   }
@@ -207,10 +207,10 @@ void Q3DView::timerEvent(QTimerEvent *event)
                //
                // pretty coloured pixels
                PixelRef pix = m_agents[j].getNode();
-               size_t x = m_pixels.searchindex(pix);
-               if (x != paftl::npos) {
-                  if (m_pixels[x].m_value < 10) {
-                     m_pixels[x].m_value += 1;
+               auto x = m_pixels.find(pix);
+               if (x != m_pixels.end()) {
+                  if (x->second.m_value < 10) {
+                     x->second.m_value += 1;
                   }
                }
             }
@@ -474,7 +474,7 @@ void Q3DView::ReloadPointData()
          PixelRef pix = table.getRowKey(i);
          Point2f p = map.depixelate(pix);
          p.normalScale(m_region);
-         m_pixels.add(pix,C3DPixelData(p));
+         m_pixels[pix] = C3DPixelData(p);
       }
    }
    else {

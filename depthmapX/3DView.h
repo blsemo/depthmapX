@@ -25,6 +25,8 @@
 #include "GraphDoc.h"
 #include <salalib/nagent.h>
 
+#include <map>
+
 #define ID_ADD_AGENT                    32947
 #define ID_3D_PAN                       32948
 #define ID_3D_ZOOM                      32949
@@ -116,7 +118,7 @@ public:
    QtRegion m_region;
    float *m_points;
    float m_rect[4][3];
-   pqmap<int,C3DPixelData> m_pixels;
+   std::map<int,C3DPixelData> m_pixels;
    //
    int m_pointcount;
    //
