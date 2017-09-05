@@ -2120,7 +2120,7 @@ void MainWindow::RedoPlotViewMenu(QGraphDoc* pDoc)
 
    // this will be used to distinguish between viewing VGA and axial maps
    int view_class = pDoc->m_meta_graph->getViewClass() & (MetaGraph::VIEWVGA | MetaGraph::VIEWAXIAL | MetaGraph::VIEWDATA);
-   int curr_j = 0;
+   int cur_sel = 0;
 
    if (pDoc->m_meta_graph->setLock(this)) {
       m_view_map_entries.clear();
@@ -2129,11 +2129,10 @@ void MainWindow::RedoPlotViewMenu(QGraphDoc* pDoc)
          int displayed_ref = map.getDisplayedAttribute();
 
          const AttributeTable& table = map.getAttributeTable();
-         m_view_map_entries.add(0, "Ref Number");
          for (int i = 0; i < table.getColumnCount(); i++) {
-            m_view_map_entries.add(i+1, table.getColumnName(i));
+            m_view_map_entries.push_back(table.getColumnName(i));
             if (map.getDisplayedAttribute() == i) {
-               curr_j = i + 1;
+               cur_sel = i;
             }
          }
       }
@@ -2141,12 +2140,10 @@ void MainWindow::RedoPlotViewMenu(QGraphDoc* pDoc)
          // using attribute tables is very, very simple...
          const ShapeGraph& map = pDoc->m_meta_graph->getDisplayedShapeGraph();
          const AttributeTable& table = map.getAttributeTable();
-         m_view_map_entries.add(0, "Ref Number");
-         curr_j = 0;
          for (int i = 0; i < table.getColumnCount(); i++) {
-            m_view_map_entries.add(i+1, table.getColumnName(i));
+            m_view_map_entries.push_back(table.getColumnName(i));
             if (map.getDisplayedAttribute() == i) {
-               curr_j = i + 1;
+               cur_sel = i;
             }
          }
       }
@@ -2154,26 +2151,25 @@ void MainWindow::RedoPlotViewMenu(QGraphDoc* pDoc)
          // using attribute tables is very, very simple...
          const ShapeMap& map = pDoc->m_meta_graph->getDisplayedDataMap();
          const AttributeTable& table = map.getAttributeTable();
-         m_view_map_entries.add(0, "Ref Number");
-         curr_j = 0;
          for (int i = 0; i < table.getColumnCount(); i++) {
-            m_view_map_entries.add(i+1, table.getColumnName(i));
+            m_view_map_entries.push_back(table.getColumnName(i));
             if (map.getDisplayedAttribute() == i) {
-               curr_j = i + 1;
+               cur_sel = i;
             }
          }
       }
       pDoc->m_meta_graph->releaseLock(this);
    }
 
-   int t, cur_sel = 0;
+   int t = 0;
    x_coord->clear();
    y_coord->clear();
 
-   for (size_t i = 0; i < m_view_map_entries.size(); i++) {
-      if (curr_j == m_view_map_entries.key(i)) cur_sel = (int) i;
-      x_coord->addItem( QString(m_view_map_entries.value(i).c_str()) );
-      y_coord->addItem( QString(m_view_map_entries.value(i).c_str()) );
+   x_coord->addItem("Ref Number");
+   y_coord->addItem("Ref Number");
+   for (auto entry : m_view_map_entries) {
+      x_coord->addItem( QString(entry.c_str()) );
+      y_coord->addItem( QString(entry.c_str()) );
    }
 
    t = ((QPlotView*)pDoc->m_view[QGraphDoc::VIEW_SCATTER])->curr_y;
