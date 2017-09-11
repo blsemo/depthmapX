@@ -18,11 +18,13 @@
 
 #include <math.h>
 #include <float.h>
+#include <functional>
 
 #include <salalib/mgraph.h>
 #include <salalib/attributes.h>
 
 #include "genlib/stringutils.h"
+#include "genlib/legacyconverters.h"
 ////////////////////////////////////////////////////////////////////////////////////
 
 // helpers: local sorting routines
@@ -63,14 +65,14 @@ int AttributeTable::insertColumn(const std::string& name)
    if (index != paftl::npos) {
       m_columns[index].reset();
       int phys_col = m_columns[index].m_physical_col;
-      for (size_t i = 0; i < size(); i++) {
-         at(i)[phys_col] = -1.0f;
+      for (auto elem : m_data) {
+         elem.second[phys_col] = -1.0f;
       }
    }
    else {
       index = m_columns.add(AttributeColumn(name));
-      for (size_t i = 0; i < size(); i++) {
-         at(i).push_back(-1.0f);
+      for (auto elem : m_data) {
+         elem.second.push_back(-1.0f);
       }
       m_columns[index].m_physical_col = m_columns.size() - 1;
    }
@@ -81,8 +83,8 @@ void AttributeTable::removeColumn(int col)
 {
    int phys_col = m_columns[col].m_physical_col;
    // remove data:
-   for (size_t i = 0; i < size(); i++) {
-      at(i).remove_at(phys_col);
+   for (auto elem : m_data) {
+      elem.second.remove_at(phys_col);
    }
    // remove column head:
    m_columns.remove_at(col);
@@ -121,16 +123,27 @@ int AttributeTable::renameColumn(int col, const std::string& name)
 
 int AttributeTable::insertRow(int key)
 {
-   int index = add(key,AttributeRow());
-   value(index).init(m_columns.size());
-   return index;
+   AttributeTableEntry entry(key, AttributeRow());
+   entry.second.init(m_columns.size());
+   if (m_data.empty() || key > m_data.back().first)
+   {
+       m_data.push_back(entry);
+       return m_data.size() - 1;
+   }
+   auto iter = std::lower_bound(m_data.begin(), m_data.end(), entry);
+   if ( iter->first == key )
+   {
+       throw exception("Duplicate key");
+   }
+   auto loc = m_data.insert(iter, entry);
+   return loc - m_data.begin();
 }
 
 void AttributeTable::removeRow(int key)
 {
-   size_t index = searchindex(key);
-   if (index != paftl::npos) {
-      remove_at(index);
+   auto iter = std::lower_bound(m_data.begin(), m_data.end(), AttributeTableEntry(key, AttributeRow()));
+   if (iter != m_data.end() && iter->first == key ) {
+      m_data.erase(iter);
    }
 }
 
@@ -140,8 +153,8 @@ void AttributeTable::setColumnValue(int col, float val)
    m_columns[col].m_tot = 0.0;
    m_columns[col].m_min = val;
    m_columns[col].m_max = val;
-   for (size_t i = 0; i < size(); i++) {
-      value(i).at(phys_col) = val;
+   for (auto elem : m_data) {
+      elem.second.at(phys_col) = val;
       m_columns[col].m_tot += val;
    }
 }
@@ -152,43 +165,37 @@ void AttributeTable::setColumnValue(int col, float val)
 
 bool AttributeTable::selectRowByKey(int key) const
 {
-   size_t index = searchindex(key);
-   if (index != paftl::npos) {
-      if ((m_visible_layers & value(index).m_layers) != 0 && !value(index).m_selected) {
-         value(index).m_selected = true;
+   auto iter = std::lower_bound(m_data.begin(), m_data.end(), AttributeTableEntry(key, AttributeRow()));
+   if (iter != m_data.end() && iter->first == key) {
+      if ((m_visible_layers & iter->second.m_layers) != 0 && !iter->second.m_selected) {
+         iter->second.m_selected = true;
          m_sel_count++;
-         addSelValue(getValue(index,m_display_column));
-      }
-      else {
-         // already selected or not visible
-         index = -1;
+         addSelValue(getValue(iter,m_display_column));
+         return true;
       }
    }
-   return index != -1;
+   return false;
 }
 
 bool AttributeTable::selectRowByIndex(int index) const
 {
    if (index != -1) {
-      if ((m_visible_layers & value(index).m_layers) != 0 && !value(index).m_selected) {
-         value(index).m_selected = true;
+      if ((m_visible_layers & m_data[index].second.m_layers) != 0 && !m_data[index].second.m_selected) {
+         m_data[index].second.m_selected = true;
          m_sel_count++;
          addSelValue(getValue(index,m_display_column));
-      }
-      else {
-         // already selected
-         index = -1;
+         return true;
       }
    }
-   return index != -1;
+   return false;
 }
 
 void AttributeTable::deselectAll() const
 {
    m_sel_count = 0;
    m_sel_value = 0.0;
-   for (size_t i = 0; i < size(); i++) {
-      value(i).m_selected = false;
+   for (auto elem : m_data) {
+      elem.second.m_selected = false;
    }
 }
 
@@ -272,9 +279,9 @@ bool AttributeTable::selectionToLayer(const std::string& name)
    m_layers.add(newlayer,name);
 
    // convert everything in the selection to the new layer
-   for (size_t i = 0; i < size(); i++) {
-      if (isVisible(i) && isSelected(i)) {
-         at(i).m_layers |= newlayer;
+   for (auto elem : m_data) {
+      if (isVisible(elem.second) && elem.second.m_selected) {
+         elem.second.m_layers |= newlayer;
       }
    }
 
@@ -328,17 +335,29 @@ bool AttributeTable::read( ifstream& stream, int version )
    stream.read((char *)&rowcount, sizeof(rowcount));
    for (int i = 0; i < rowcount; i++) {
       stream.read((char *)&rowkey, sizeof(rowkey));
-      int index = add(rowkey,AttributeRow());
+      AttributeTableEntry entry(rowkey, AttributeRow());
       if (version >= VERSION_MAP_LAYERS) {
-         stream.read((char *)&(value(index).m_layers),sizeof(int64));
+         stream.read((char *)&(entry.second.m_layers),sizeof(int64));
       }
-      value(index).read(stream);
+      entry.second.read(stream);
+      m_data.push_back(entry);
    }
    if (version >= VERSION_GATE_MAPS) {
       // ref column display params
       stream.read((char *)&m_display_params,sizeof(m_display_params));
    }
    return true;
+}
+
+void AttributeTable::removeRowids(const pvecint &ids)
+{
+    auto stdIds = genshim::toStdVec(ids);
+    std::sort(stdIds.begin(), stdIds.end(), std::greater<int>() );
+    for (auto id : stdIds)
+    {
+        m_data.erase(m_data.begin() + id);
+    }
+
 }
 
 bool AttributeTable::write( ofstream& stream, int version )
@@ -359,15 +378,15 @@ bool AttributeTable::write( ofstream& stream, int version )
    for (int j = 0; j < colcount; j++) {
       m_columns[j].write(stream,version);
    }
-   int rowcount = size(), rowkey;
+   int rowcount = m_data.size(), rowkey;
    stream.write((char *)&rowcount, sizeof(rowcount));
-   for (int i = 0; i < rowcount; i++) {
-      rowkey = key(i);
+   for (auto elem : m_data) {
+      rowkey = elem.first;
       stream.write((char *)&rowkey, sizeof(rowkey));
       if (version >= VERSION_MAP_LAYERS) {
-         stream.write((char *)&(value(i).m_layers),sizeof(int64));
+         stream.write((char *)&(elem.second.m_layers),sizeof(int64));
       }
-      value(i).write(stream);
+      elem.second.write(stream);
    }
    // ref column display params
    stream.write((char *)&m_display_params,sizeof(m_display_params));
@@ -392,7 +411,7 @@ bool AttributeTable::outputRow( int row, ostream& stream, char delim, bool updat
 
    for (size_t i = 0; i < m_columns.size(); i++) {
       if (!updated_only || m_columns[i].m_updated) {
-         stream << delim << value(row).at(m_columns[i].m_physical_col);
+         stream << delim << m_data[row].second.at(m_columns[i].m_physical_col);
       }
    }
    stream << endl;
