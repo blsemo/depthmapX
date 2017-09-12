@@ -3,7 +3,7 @@ TEMPLATE = app
 CONFIG += console c++11
 CONFIG -= app_bundle
 CONFIG -= qt
-INCLUDEPATH += ../ThirdParty/Catch
+INCLUDEPATH += ../ThirdParty/Catch ../ThirdParty/FakeIt
 
 SOURCES += main.cpp \
     testentityparsing.cpp \
@@ -13,7 +13,8 @@ SOURCES += main.cpp \
     testisovistdef.cpp \
     testshapegraphs.cpp \
     teststructsizes.cpp \
-    testsparksieve.cpp
+    testsparksieve.cpp \
+    testattributetable.cpp
 
 win32:Release:LIBS += -L../genlib/release -L../salalib/release
 win32:Debug:LIBS += -L../genlib/debug -L../salalib/debug
