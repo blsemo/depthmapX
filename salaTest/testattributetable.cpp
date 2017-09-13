@@ -119,3 +119,100 @@ TEST_CASE("test attribute row")
     REQUIRE(row.getValue(0) == Approx(1.2));
     REQUIRE_THROWS_AS(row.getValue(2), std::out_of_range);
 }
+
+TEST_CASE("test attribute table")
+{
+    using namespace dXreimpl;
+    AttributeTable<SerialisedPixelRef> table;
+
+    table.insertOrResetColumn("col1");
+    table.getOrInsertColumn("col2");
+    table.insertOrResetLockedColumn("lcol1");
+    table.getOrInsertLockedColumn("lcol2", "formula");
+
+    REQUIRE(table.getNumColumns() == 4);
+    REQUIRE(table.getColumnIndex("col2") == 1);
+    REQUIRE(table.getColumnName(1) == "col2");
+    REQUIRE(table.getColumn(1).getName() == "col2");
+    REQUIRE(table.getColumn(1).isLocked() == false);
+    REQUIRE(table.getColumn(3).getName() == "lcol2");
+    REQUIRE(table.getColumn(3).isLocked());
+
+    table.addRow(SerialisedPixelRef(0));
+    REQUIRE(table.getRow(SerialisedPixelRef(0)).getValue("col1") == -1 );
+    table.getRow(SerialisedPixelRef(0)).setValue("col1", 1.2f );
+    REQUIRE(table.getRow(SerialisedPixelRef(0)).getValue("col1") == Approx(1.2f) );
+    REQUIRE(table.getRow(SerialisedPixelRef(0)).getValue(0) == Approx(1.2f) );
+
+    REQUIRE(table.getRow(SerialisedPixelRef(0)).getValue("lcol2") == -1 );
+    table.getRow(SerialisedPixelRef(0)).setValue(3, 1.4f );
+    REQUIRE(table.getRow(SerialisedPixelRef(0)).getValue("lcol2") == Approx(1.4f) );
+    REQUIRE(table.getRow(SerialisedPixelRef(0)).getValue(3) == Approx(1.4f) );
+
+    REQUIRE_THROWS_AS(table.getRow(SerialisedPixelRef(0)).getValue(4), std::out_of_range);
+
+    table.removeColumn(0);
+    table.removeColumn(1);
+
+    REQUIRE(table.getNumColumns() == 2);
+    REQUIRE(table.getColumn(0).getName() == "col2");
+    REQUIRE(table.getColumn(1).getName() == "lcol2");
+    REQUIRE(table.getColumnIndex("lcol2") == 1);
+
+    REQUIRE(table.getRow(SerialisedPixelRef(0)).getValue("col2") == -1.0 );
+    REQUIRE(table.getRow(SerialisedPixelRef(0)).getValue(0) == -1.0 );
+    REQUIRE(table.getRow(SerialisedPixelRef(0)).getValue("lcol2") == Approx(1.4f) );
+    REQUIRE(table.getRow(SerialisedPixelRef(0)).getValue(1) == Approx(1.4f) );
+
+
+    REQUIRE_THROWS_AS(table.getRow(SerialisedPixelRef(0)).getValue(2), std::out_of_range);
+
+    table.addRow(SerialisedPixelRef(1));
+    REQUIRE_THROWS_AS(table.getRow(SerialisedPixelRef(1)).getValue(2), std::out_of_range);
+    REQUIRE(table.getRow(SerialisedPixelRef(1)).getValue("col2") == -1.0 );
+    REQUIRE(table.getRow(SerialisedPixelRef(1)).getValue(0) == -1.0 );
+    REQUIRE(table.getRow(SerialisedPixelRef(1)).getValue("lcol2") == -1.0 );
+    REQUIRE(table.getRow(SerialisedPixelRef(1)).getValue(1) == -1.0 );
+
+    table.getRow(SerialisedPixelRef(1)).setValue(0, 2.4f);
+    table.getRow(SerialisedPixelRef(1)).setValue("lcol2", 2.6f);
+    REQUIRE(table.getRow(SerialisedPixelRef(1)).getValue("col2") == Approx(2.4) );
+    REQUIRE(table.getRow(SerialisedPixelRef(1)).getValue(1) == Approx(2.6) );
+
+    size_t idx = table.getOrInsertColumn("col2");
+    REQUIRE(idx == 0);
+    REQUIRE(table.getRow(SerialisedPixelRef(1)).getValue("col2") == Approx(2.4) );
+    REQUIRE(table.getColumn(0).getStats().max == Approx(2.4));
+
+    idx = table.insertOrResetColumn("col2");
+    REQUIRE(idx == 0);
+    REQUIRE(table.getRow(SerialisedPixelRef(1)).getValue("col2") == -1.0 );
+    REQUIRE(table.getColumn(0).getStats().max == -1.0);
+
+    size_t newColIndex = table.getOrInsertColumn("newCol");
+    REQUIRE(newColIndex == 2);
+    REQUIRE(table.getColumnName(2) == "newCol");
+    REQUIRE(table.getColumnIndex("newCol") == 2);
+    REQUIRE(table.getColumn(2).getName() == "newCol");
+
+    REQUIRE(table.getRow(SerialisedPixelRef(0)).getValue(2) == -1.0);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}

@@ -16,6 +16,8 @@
 
 #include "attributetable.h"
 
+#include <sstream>
+
 
 const std::string &dXreimpl::AttributeColumnImpl::getName() const
 {
@@ -47,7 +49,12 @@ const std::string &dXreimpl::AttributeColumnImpl::getFormula() const
     return m_formula;
 }
 
-void dXreimpl::AttributeColumnImpl::updateStats(float val, float oldVal)
+const dXreimpl::AttributeColumnStats &dXreimpl::AttributeColumnImpl::getStats() const
+{
+    return m_stats;
+}
+
+void dXreimpl::AttributeColumnImpl::updateStats(float val, float oldVal) const
 {
     if (m_stats.total < 0)
     {
@@ -116,3 +123,5 @@ void dXreimpl::AttributeRowImpl::checkIndex(size_t index) const
         throw std::out_of_range("AttributeColumn index out of range");
     }
 }
+
+
