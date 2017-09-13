@@ -197,22 +197,11 @@ TEST_CASE("test attribute table")
 
     REQUIRE(table.getRow(SerialisedPixelRef(0)).getValue(2) == -1.0);
 
+    table.renameColumn("col2", "col_foo");
+    REQUIRE(table.getColumnName(0) == "col_foo");
+    REQUIRE(table.getColumnIndex("col_foo") == 0);
+    REQUIRE(table.getColumn(0).getName() == "col_foo");
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    REQUIRE_THROWS_AS(table.getColumnIndex("col2"), std::out_of_range);
 
 }

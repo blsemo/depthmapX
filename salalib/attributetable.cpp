@@ -75,6 +75,11 @@ void dXreimpl::AttributeColumnImpl::updateStats(float val, float oldVal) const
     }
 }
 
+void dXreimpl::AttributeColumnImpl::setName(const std::string &name)
+{
+    m_name = name;
+}
+
 
 // AttributeRow implementation
 float dXreimpl::AttributeRowImpl::getValue(const std::string &column) const

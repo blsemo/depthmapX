@@ -116,6 +116,8 @@ namespace dXreimpl
         // even when not allowed to modify the column settings
         mutable AttributeColumnStats m_stats;
 
+        void setName(const std::string &name);
+
     private:
         std::string m_name;
         bool m_locked;
@@ -306,6 +308,22 @@ namespace dXreimpl
         {
             row.second->removeColumn(colIndex);
         }
+    }
+
+    template<class RowKeyType>
+    void AttributeTable<RowKeyType>::renameColumn(const std::string &oldName, const std::string &newName)
+    {
+        auto iter = m_columnMapping.find(oldName);
+        if (iter == m_columnMapping.end())
+        {
+            throw std::out_of_range("Invalid column name");
+        }
+
+        size_t colIndex = iter->second;
+        m_columns[colIndex].setName(newName);
+        m_columnMapping.erase(iter);
+        m_columnMapping[newName] = colIndex;
+
     }
 
     template<class RowKeyType>
