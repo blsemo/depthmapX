@@ -114,6 +114,7 @@ public:
     void update3DToolbar();
     void showContextMenu(QPoint &point);
     void UpdateStatus(QString s1, QString s2, QString s3);
+    void updateGLWindows(bool datasetChanged, bool recentreView);
 
 protected:
     QGraphDoc* m_treeDoc;
@@ -156,6 +157,7 @@ private slots:
     void OnAxialConnectionsExportAsDot();
     void OnAxialConnectionsExportAsPairCSV();
     void OnSegmentConnectionsExportAsPairCSV();
+    void OnPointmapExportConnectionsAsCSV();
     void OnAddColumn();
     void OnRenameColumn();
     void OnUpdateColumn();
@@ -179,8 +181,6 @@ private slots:
     void OnToolsPointConvShapeMap();
     void OnToolsOptions();
     void OnShowResearchtoolbar();
-    void OnWindowBackground();
-    void OnWindowForeground();
     void OnViewCentreView();
     void OnViewShowGrid();
     void OnViewSummary();
@@ -193,6 +193,7 @@ private slots:
     void OnWindowMap();
     void OnViewTable();
     void OnWindow3dView();
+    void OnWindowGLView();
     void OnViewScatterplot();
     void OnToolsRun();
     void OnToolsAgentRun();
@@ -272,7 +273,7 @@ private:
 //////////////////////////////////////////////////////
 //	treeContorl
     QVector<QIcon> m_tree_icon;
-    pqmap<int, pstring> m_view_map_entries;
+    pqmap<int, std::string> m_view_map_entries;
 
     pvector<bool> m_attribute_locked;
     pmap<QTreeWidgetItem*, ItemTreeEntry> m_treegraphmap;
@@ -380,6 +381,7 @@ private:
     QAction *exportAxialConnectionsDotAct;
     QAction *exportAxialConnectionsPairAct;
     QAction *exportSegmentConnectionsPairAct;
+    QAction *exportPointmapConnectionsPairAct;
 
     //Attributes Menu Actions
     QAction *renameColumnAct;
@@ -409,8 +411,6 @@ private:
     QAction *optionsAct;
 
     //View Menu Actions
-    QAction *BackgroundAct;
-    QAction *foregroundAct;
     QAction *showGridAct;
     QAction *attributeSummaryAct;
 
@@ -419,6 +419,7 @@ private:
     QAction *scatterPlotAct;
     QAction *tableAct;
     QAction *thirdDViewAct;
+    QAction *glViewAct;
     QAction *colourRangeAct;
     QAction *cascadeAct;
     QAction *tileAct;

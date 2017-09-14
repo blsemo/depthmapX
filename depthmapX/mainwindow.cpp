@@ -31,14 +31,15 @@
 #include "mainwindow.h"
 #include "depthmapView.h"
 #include "3DView.h"
+#include "glview.h"
 #include "PlotView.h"
 #include "tableView.h"
-#include "DepthmapOptionsDlg.h"
 #include "AboutDlg.h"
+#include "settingsdialog/settingsdialog.h"
 
 
 static int current_view_type = 0;
-enum {VIEW_ALL = 0, VIEW_MAP = 1, VIEW_SCATTER = 2, VIEW_TABLE = 3, VIEW_3D = 4, VIEW_TYPES = 5};
+enum {VIEW_ALL = 0, VIEW_MAP = 1, VIEW_SCATTER = 2, VIEW_TABLE = 3, VIEW_3D = 4, VIEW_GL = 5, VIEW_TYPES = 6};
 
 const QString editstatetext[] = {"Not Editable", "Editable Off", "Editable On"};
 
@@ -101,6 +102,7 @@ MainWindow::MainWindow(const QString &fileToLoad, Settings &settings) : mSetting
     createStatusBar();
     updateToolbar();
     updateActiveWindows();
+    updateGLWindows(true, true);
 
     installEventFilter(this);
 //	setWindowIcon(QIcon(tr(":/images/cur/icon-1-1.png")));
@@ -389,6 +391,15 @@ void MainWindow::OnSegmentConnectionsExportAsPairCSV()
     }
 }
 
+void MainWindow::OnPointmapExportConnectionsAsCSV()
+{
+    QGraphDoc* m_p = activeQDepthmapDoc();
+    if(m_p)
+    {
+        m_p->OnPointmapExportConnectionsAsCSV();
+    }
+}
+
 void MainWindow::OnAddColumn()
 {
     QGraphDoc* m_p = activeQDepthmapDoc();
@@ -608,29 +619,10 @@ void MainWindow::OnToolsAPD()
 
 void MainWindow::OnToolsOptions()
 {
-    CDepthmapOptionsDlg dlg(this, m_simpleVersion);
-
-    if (QDialog::Accepted == dlg.exec()) {
-
-        m_simpleVersion = dlg.c_show_simple_version->checkState();
-        mSettings.writeSetting(SettingTag::simpleVersion, m_simpleVersion);
-        if(m_simpleVersion)
-            qWarning("SV = True");
-        else
-            qWarning("SV = False");
+    SettingsDialog dialog(mSettings);
+    if(QDialog::Accepted == dialog.exec()) {
+        readSettings();
     }
-}
-
-void MainWindow::OnWindowBackground()
-{
-    m_background = QColorDialog::getColor(m_background).rgb();
-    mSettings.writeSetting(SettingTag::backgroundColour, m_background);
-}
-
-void MainWindow::OnWindowForeground()
-{
-    m_foreground = QColorDialog::getColor(m_foreground).rgb();
-    mSettings.writeSetting(SettingTag::foregroundColour, m_foreground);
 }
 
 void MainWindow::OnShowResearchtoolbar()
@@ -830,6 +822,19 @@ void MainWindow::OnWindow3dView()
             return setActiveSubWindow(m_p->pDoc->m_view[QGraphDoc::VIEW_3D]);
         Q3DView *child = new Q3DView(this, m_p->pDoc);
         child->pDoc = m_p->pDoc;
+        mdiArea->addSubWindow(child);
+        child->show();
+    }
+}
+
+void MainWindow::OnWindowGLView()
+{
+    QDepthmapView* m_p = activeQDepthmapView();
+    if(m_p)
+    {
+        if(m_p->pDoc->m_view[QGraphDoc::VIEW_GL])
+            return setActiveSubWindow(m_p->pDoc->m_view[QGraphDoc::VIEW_GL]);
+        GLView *child = new GLView(this, m_p->pDoc, m_background, m_foreground);
         mdiArea->addSubWindow(child);
         child->show();
     }
@@ -1068,6 +1073,16 @@ void MainWindow::updateActiveWindows()
         QGraphDoc* m_p = activeQDepthmapDoc();
         OnFocusGraph(m_p, QGraphDoc::CONTROLS_LOADALL);
         m_p->SetRedrawFlag(VIEW_ALL, QGraphDoc::REDRAW_GRAPH, QGraphDoc::NEW_FOCUS );
+    }
+}
+
+void MainWindow::updateGLWindows(bool datasetChanged, bool recentreView) {
+    QList<QMdiSubWindow *> windows = mdiArea->subWindowList();
+    for (int i = 0; i < windows.size(); ++i) {
+        GLView *child = qobject_cast<GLView*>(windows.at(i)->widget());
+        if(!child) continue;
+        if(datasetChanged) child->notifyDatasetChanged();
+        if(recentreView) child->matchViewToCurrentMetaGraph();
     }
 }
 
@@ -2212,8 +2227,6 @@ void MainWindow::OnSelchangeViewSelector_Y(const QString &string)
 
 void MainWindow::updateViewMenu()
 {
-    BackgroundAct->setEnabled(true);
-    foregroundAct->setEnabled(true);
     QGraphDoc* m_p = activeQDepthmapDoc();
     if(!m_p)
     {
@@ -2586,6 +2599,10 @@ void MainWindow::updateWindowMenu()
     if(m_p && m_p->m_view[QGraphDoc::VIEW_3D]) thirdDViewAct->setChecked(true);
     else thirdDViewAct->setChecked(false);
 
+    windowMenu->addAction(glViewAct);
+    if(m_p && m_p->m_view[QGraphDoc::VIEW_GL]) glViewAct->setChecked(true);
+    else glViewAct->setChecked(false);
+
     windowMenu->addSeparator();
     windowMenu->addAction(colourRangeAct);
     windowMenu->addSeparator();
@@ -2600,11 +2617,13 @@ void MainWindow::updateWindowMenu()
         scatterPlotAct->setEnabled(0);
         tableAct->setEnabled(0);
         thirdDViewAct->setEnabled(0);
+        glViewAct->setEnabled(0);
     }
     else
     {
         thirdDViewAct->setEnabled(true);
         mapAct->setEnabled(true);
+        glViewAct->setEnabled(true);
         if (m_p->m_meta_graph && m_p->m_meta_graph->viewingProcessed())
         {
             tableAct->setEnabled(true);
@@ -2922,6 +2941,10 @@ void MainWindow::createActions()
     exportSegmentConnectionsPairAct->setStatusTip(tr("Export a list of line-line intersections and weights"));
     connect(exportSegmentConnectionsPairAct, SIGNAL(triggered()), this, SLOT(OnSegmentConnectionsExportAsPairCSV()));
 
+    exportPointmapConnectionsPairAct = new QAction(tr("Visibility Graph Connections as CSV..."), this);
+    exportPointmapConnectionsPairAct->setStatusTip(tr("Export connections between cells in a visibility graph as an adjacency list"));
+    connect(exportPointmapConnectionsPairAct, SIGNAL(triggered()), this, SLOT(OnPointmapExportConnectionsAsCSV()));
+
     //Attributes Menu Actions
     renameColumnAct = new QAction(tr("&Rename Column..."), this);
     renameColumnAct->setStatusTip(tr("Rename the currently displayed attribute"));
@@ -3006,14 +3029,6 @@ void MainWindow::createActions()
     connect(optionsAct, SIGNAL(triggered()), this, SLOT(OnToolsOptions()));
 
     //View Menu Actions
-    BackgroundAct = new QAction(tr("&Background..."), this);
-    BackgroundAct->setStatusTip(tr("Turns the current selection into a layer object [Ctrl+G]\nAdd Layer Object"));
-    connect(BackgroundAct, SIGNAL(triggered()), this, SLOT(OnWindowBackground()));
-
-    foregroundAct = new QAction(tr("&Foreground..."), this);
-    foregroundAct->setStatusTip(tr("Clear agent trails"));
-    connect(foregroundAct, SIGNAL(triggered()), this, SLOT(OnWindowForeground()));
-
     showGridAct = new QAction(tr("Show &Grid"), this);
     showGridAct->setStatusTip(tr("Display grid"));
     showGridAct->setCheckable(true);
@@ -3039,6 +3054,10 @@ void MainWindow::createActions()
     thirdDViewAct = new QAction(tr("&3D View"), this);
     thirdDViewAct->setCheckable(true);
     connect(thirdDViewAct, SIGNAL(triggered()), this, SLOT(OnWindow3dView()));
+
+    glViewAct = new QAction(tr("Map (Open&GL)"), this);
+    glViewAct->setCheckable(true);
+    connect(glViewAct, SIGNAL(triggered()), this, SLOT(OnWindowGLView()));
 
     colourRangeAct = new QAction(tr("&Colour Range"), this);
     connect(colourRangeAct, SIGNAL(triggered()), this, SLOT(OnViewColourRange()));
@@ -3432,6 +3451,7 @@ void MainWindow::createMenus()
     exportSubMenu->addAction(exportAxialConnectionsDotAct);
     exportSubMenu->addAction(exportAxialConnectionsPairAct);
     exportSubMenu->addAction(exportSegmentConnectionsPairAct);
+    exportSubMenu->addAction(exportPointmapConnectionsPairAct);
 
     attributesMenu = menuBar()->addMenu(tr("&Attributes"));
     attributesMenu->addAction(addColumAct);
@@ -3482,9 +3502,6 @@ void MainWindow::createMenus()
     toolsMenu->addAction(optionsAct);
 
     viewMenu = menuBar()->addMenu(tr("&View"));
-    viewMenu->addAction(BackgroundAct);
-    viewMenu->addAction(foregroundAct);
-    viewMenu->addSeparator();
     viewMenu->addAction(RecentAct);
     viewMenu->addAction(showGridAct);
     viewMenu->addAction(attributeSummaryAct);
@@ -3494,6 +3511,7 @@ void MainWindow::createMenus()
     windowMenu->addAction(scatterPlotAct);
     windowMenu->addAction(tableAct);
     windowMenu->addAction(thirdDViewAct);
+    windowMenu->addAction(glViewAct);
     windowMenu->addSeparator();
     windowMenu->addAction(colourRangeAct);
     windowMenu->addSeparator();

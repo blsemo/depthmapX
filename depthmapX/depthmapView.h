@@ -215,7 +215,9 @@ private:
    void AltMode();
    void BeginJoin();
    void BeginDrag(QPoint point);
-   
+
+   QPixmap *m_pixmap;
+
 };
    
    
