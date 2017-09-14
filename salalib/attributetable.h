@@ -243,7 +243,7 @@ namespace dXreimpl
         class iterator_item_impl : public iterator_item
         {
         public:
-            iterator_item_impl( iterator_type & iter) : m_iter(iter)
+            iterator_item_impl( const iterator_type & iter) : m_iter(iter)
             {}
             template<typename other_type> iterator_item_impl(const iterator_item_impl<other_type>& other) : m_iter(other.m_iter)
             {}
@@ -294,7 +294,7 @@ namespace dXreimpl
         class const_iterator_impl : public std::iterator<std::bidirectional_iterator_tag, iterator_item>
         {
         public:
-            const_iterator_impl( iterator_type & iter) : m_item(iter)
+            const_iterator_impl( const iterator_type& iter) : m_item(iter)
             {}
             template<typename other_type> const_iterator_impl(const const_iterator_impl<other_type>& other) : m_item(other.m_item)
             {}
@@ -304,10 +304,10 @@ namespace dXreimpl
                 return *this;
             }
 
-            iterator& operator++() {m_item.forward();return *this;}
-            iterator operator++(int) {iterator tmp(*this); operator++(); return tmp;}
-            iterator& operator--() {m_item.back();return *this;}
-            iterator operator--(int) {iterator tmp(*this); operator--(); return tmp;}
+            const_iterator_impl& operator++() {m_item.forward();return *this;}
+            const_iterator_impl operator++(int) {const_iterator_impl<iterator_type> tmp(*this); operator++(); return tmp;}
+            const_iterator_impl& operator--() {m_item.back();return *this;}
+            const_iterator_impl operator--(int) {const_iterator_impl<iterator_type> tmp(*this); operator--(); return tmp;}
             template<typename other_type> bool operator==(const const_iterator_impl<other_type>& rhs) const {return m_item == rhs.m_item;}
             template<typename other_type> bool operator!=(const const_iterator_impl<other_type>& rhs) const {return !(m_item==rhs.m_item);}
             const iterator_item& operator*() const {return m_item;}
@@ -325,17 +325,17 @@ namespace dXreimpl
         class iterator : public const_iterator_impl<typename StorageType::iterator>
         {
         public:
-            iterator(typename StorageType::iterator & iter) : const_iterator_impl(iter)
+            iterator(const typename StorageType::iterator& iter) : const_iterator_impl<typename StorageType::iterator>(iter)
             {}
-            template<typename other_type> iterator(const const_iterator_impl<other_type>& other) : m_item(other.m_item)
+            template<typename other_type> iterator(const const_iterator_impl<other_type>& other) : const_iterator_impl<typename StorageType::iterator>::m_item(other.m_item)
             {}
             template<typename other_type> iterator& operator =(const const_iterator_impl<other_type> &other)
             {
-                m_item = other.m_item;
+                const_iterator_impl<typename StorageType::iterator>::m_item = other.m_item;
                 return *this;
             }
-            iterator_item& operator*() {return m_item;}
-            iterator_item* operator->() {return &m_item;}
+            iterator_item& operator*() {return const_iterator_impl<typename StorageType::iterator>::m_item;}
+            iterator_item* operator->() {return &(const_iterator_impl<typename StorageType::iterator>::m_item);}
         };
 
         // stl style iteration methods

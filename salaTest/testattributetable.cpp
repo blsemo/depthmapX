@@ -215,9 +215,9 @@ TEST_CASE("attibute table iterations")
     table.getOrInsertColumn("col2");
 
     auto& row = table.addRow(SerialisedPixelRef(0));
-    row.setValue(0, 0.5);
+    row.setValue(0, 0.5f);
     auto& row2 = table.addRow(SerialisedPixelRef(1));
-    row2.setValue(0, 1.0);
+    row2.setValue(0, 1.0f);
 
     AttributeTable<SerialisedPixelRef>::iterator iter = table.begin();
     REQUIRE((*iter).getKey().value == 0);
@@ -231,7 +231,7 @@ TEST_CASE("attibute table iterations")
 
     for( auto& item :  table)
     {
-        item.getRow().setValue(1, 2.0);
+        item.getRow().setValue(1, 2.0f);
     }
 
     REQUIRE(table.getRow(0).getValue(1) == Approx(2.0));
@@ -259,8 +259,15 @@ TEST_CASE("attibute table iterations")
     REQUIRE(cfoo == iter);
     REQUIRE(ccfoo == iter);
 
-    cfoo = table.begin();
-    foo = table.end();
+    cfoo = table.end();
+    foo = table.begin();
 
     cfoo = foo;
+
+    foo->getRow().setValue(1,2.2f);
+    ++foo;
+    foo->getRow().setValue(1, 3.2f);
+
+    REQUIRE(table.getRow(0).getValue(1) == Approx(2.2));
+    REQUIRE(table.getRow(1).getValue(1) == Approx(3.2));
 }
