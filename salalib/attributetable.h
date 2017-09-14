@@ -25,6 +25,9 @@
 
 namespace dXreimpl
 {
+///
+/// Interface to an attribute row
+///
     class AttributeRow
     {
     public:
@@ -37,10 +40,11 @@ namespace dXreimpl
     };
 
 
+    ///
+    /// Container for attribute column stats - really just POD to pass them around
+    ///
     struct AttributeColumnStats
     {
-
-
         AttributeColumnStats( double minimum, double maximum, double tot, double vTot, double vMin, double vMax ): min(minimum), max(maximum), total(tot), visibleTotal(vTot), visibleMin(vMin), visibleMax(vMax)
         {}
 
@@ -54,11 +58,12 @@ namespace dXreimpl
         double visibleTotal;
         double visibleMin;
         double visibleMax;
-
     };
 
 
-
+    ///
+    /// Interface to an attribute column
+    ///
     class AttributeColumn
     {
     public:
@@ -80,6 +85,11 @@ namespace dXreimpl
     };
 
 
+    ///
+    /// Interface to an Attribute Column Manager
+    /// This handles the mapping from column name to index and actually storing the column implementations
+    /// Implemented by AttributeTable
+    ///
     class AttributeColumnManager
     {
     public:
@@ -95,8 +105,6 @@ namespace dXreimpl
 
     class AttributeColumnImpl: public AttributeColumn, AttributeColumnStats
     {
-
-
         // AttributeColumn interface
     public:
         AttributeColumnImpl(const std::string &name, const std::string &formula = std::string()) : m_name(name), m_locked(false), m_hidden(false), m_formula(formula)
@@ -129,7 +137,7 @@ namespace dXreimpl
     };
 
 
-
+    // Implementation of AttributeRow
     class AttributeRowImpl : public AttributeRow
     {
     public:
@@ -172,8 +180,13 @@ namespace dXreimpl
         }
     };
 
+    ///
+    /// AttributeTable
+    /// Templated on the RowKeyType so we can switch that out easily, I am not to happy with the current one...
+    ///
     template<typename RowKeyType> class AttributeTable : public AttributeColumnManager
     {
+        // AttributeTable "interface" - the actual table handling
     public:
         AttributeTable();
         AttributeRow& getRow(const RowKeyType& key );
@@ -187,11 +200,7 @@ namespace dXreimpl
         void removeColumn(size_t colIndex);
         void renameColumn(const std::string& oldName, const std::string& newName);
 
-        typedef std::map<RowKeyType, std::unique_ptr<AttributeRowImpl>> StorageType;
-    private:
-        StorageType m_rows;
-        std::map<std::string, size_t> m_columnMapping;
-        std::vector<AttributeColumnImpl> m_columns;
+
 
    // interface AttributeColumnManager
     public:
@@ -201,10 +210,25 @@ namespace dXreimpl
         virtual size_t getNumColumns() const;
 
     private:
+        typedef std::map<RowKeyType, std::unique_ptr<AttributeRowImpl>> StorageType;
+        StorageType m_rows;
+        std::map<std::string, size_t> m_columnMapping;
+        std::vector<AttributeColumnImpl> m_columns;
+
+    private:
         void checkColumnIndex(size_t index) const;
         size_t addColumnInternal(const std::string &name, const std::string &formula);
 
+    // warning - here be dragons!
+    // This is the implementation of stl style iterators on attribute table, allowing efficient
+    // iteration of rows without resorting to log(n) access via the map
+
+
     public:
+        ///
+        /// \brief The iterator_item class
+        /// The value of an iterator over the table - we want to hide the actual storage details and just
+        /// return references to rows and keys.
         class iterator_item
         {
         public:
@@ -214,6 +238,7 @@ namespace dXreimpl
             virtual ~iterator_item(){}
         };
     private:
+        // implementation of the iterator_item, templated on iterator type to allow const and non-const iterator
         template <typename iterator_type>
         class iterator_item_impl : public iterator_item
         {
@@ -264,7 +289,7 @@ namespace dXreimpl
         };
 
 
-    public:
+        // iterator implementation - templated on iterator type for const/non-const
         template <typename iterator_type>
         class const_iterator_impl : public std::iterator<std::bidirectional_iterator_tag, iterator_item>
         {
@@ -292,8 +317,11 @@ namespace dXreimpl
             iterator_item_impl<iterator_type> m_item;
         };
 
+    public:
+        // const iterator is just a typedef on the impl
         typedef const_iterator_impl<typename StorageType::const_iterator> const_iterator;
 
+        // non const iterator needs some extra methods
         class iterator : public const_iterator_impl<typename StorageType::iterator>
         {
         public:
@@ -310,6 +338,7 @@ namespace dXreimpl
             iterator_item* operator->() {return &m_item;}
         };
 
+        // stl style iteration methods
         const_iterator begin() const
         {
             return const_iterator(m_rows.begin());
@@ -334,6 +363,7 @@ namespace dXreimpl
 
     };
 
+// Below here is the implementation of AttributeTable methods - needs to be header only as it is templated.
 
     template<class RowKeyType>
     AttributeTable<RowKeyType>::AttributeTable()
@@ -513,21 +543,5 @@ namespace dXreimpl
         }
         return colIndex;
     }
-
-//    template <class RowKeyType>
-//    AttributeRow& AttributeTable<RowKeyType>::iterator_item_impl<typename AttributeTable<RowKeyType>::StorageType::iterator>::getRow()
-//    {
-//        return *m_iter->second;
-//    }
-
-//    template <class RowKeyType>
-//    AttributeRow& AttributeTable<RowKeyType>::iterator_item_impl<typename AttributeTable<RowKeyType>::StorageType::const_iterator>::getRow()
-//    {
-//        throw std::bad_exception("Should not be able to call this on a const iterator");
-//    }
-
-
-
-
 }
 
