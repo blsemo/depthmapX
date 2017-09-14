@@ -20,6 +20,7 @@
 #include <vector>
 #include <memory>
 #include <sstream>
+#include <iterator>
 
 
 namespace dXreimpl
@@ -171,7 +172,7 @@ namespace dXreimpl
         }
     };
 
-    template<class RowKeyType> class AttributeTable : public AttributeColumnManager
+    template<typename RowKeyType> class AttributeTable : public AttributeColumnManager
     {
     public:
         AttributeTable();
@@ -186,8 +187,9 @@ namespace dXreimpl
         void removeColumn(size_t colIndex);
         void renameColumn(const std::string& oldName, const std::string& newName);
 
+        typedef std::map<RowKeyType, std::unique_ptr<AttributeRowImpl>> StorageType;
     private:
-        std::map<RowKeyType, std::unique_ptr<AttributeRowImpl>> m_rows;
+        StorageType m_rows;
         std::map<std::string, size_t> m_columnMapping;
         std::vector<AttributeColumnImpl> m_columns;
 
@@ -201,6 +203,135 @@ namespace dXreimpl
     private:
         void checkColumnIndex(size_t index) const;
         size_t addColumnInternal(const std::string &name, const std::string &formula);
+
+    public:
+        class iterator_item
+        {
+        public:
+            virtual const RowKeyType& getKey() const = 0;
+            virtual const AttributeRow& getRow() const = 0;
+            virtual AttributeRow& getRow() = 0;
+            virtual ~iterator_item(){}
+        };
+    private:
+        template <typename iterator_type>
+        class iterator_item_impl : public iterator_item
+        {
+        public:
+            iterator_item_impl( iterator_type & iter) : m_iter(iter)
+            {}
+            template<typename other_type> iterator_item_impl(const iterator_item_impl<other_type>& other) : m_iter(other.m_iter)
+            {}
+
+            template<typename other_type> iterator_item_impl<iterator_type>& operator = (const iterator_item_impl<other_type>& other)
+            {
+                m_iter = other.m_iter;
+                return *this;
+            }
+
+
+            const RowKeyType& getKey() const
+            {
+                return m_iter->first;
+            }
+
+            const AttributeRow& getRow() const
+            {
+                return *m_iter->second;
+            }
+
+           AttributeRow& getRow()
+           {
+               return *m_iter->second;
+           }
+
+            void forward() const
+            {
+                ++m_iter;
+            }
+
+            void back() const
+            {
+                --m_iter;
+            }
+
+            template<typename other_type> bool operator == (const iterator_item_impl<other_type> &other) const
+            {
+                return m_iter == other.m_iter;
+            }
+        public:
+            mutable iterator_type m_iter;
+        };
+
+
+    public:
+        template <typename iterator_type>
+        class const_iterator_impl : public std::iterator<std::bidirectional_iterator_tag, iterator_item>
+        {
+        public:
+            const_iterator_impl( iterator_type & iter) : m_item(iter)
+            {}
+            template<typename other_type> const_iterator_impl(const const_iterator_impl<other_type>& other) : m_item(other.m_item)
+            {}
+            template<typename other_type> const_iterator_impl& operator =(const const_iterator_impl<other_type> &other)
+            {
+                m_item = other.m_item;
+                return *this;
+            }
+
+            iterator& operator++() {m_item.forward();return *this;}
+            iterator operator++(int) {iterator tmp(*this); operator++(); return tmp;}
+            iterator& operator--() {m_item.back();return *this;}
+            iterator operator--(int) {iterator tmp(*this); operator--(); return tmp;}
+            template<typename other_type> bool operator==(const const_iterator_impl<other_type>& rhs) const {return m_item == rhs.m_item;}
+            template<typename other_type> bool operator!=(const const_iterator_impl<other_type>& rhs) const {return !(m_item==rhs.m_item);}
+            const iterator_item& operator*() const {return m_item;}
+            const iterator_item* operator->() const {return &m_item;}
+
+        public:
+            iterator_item_impl<iterator_type> m_item;
+        };
+
+        typedef const_iterator_impl<typename StorageType::const_iterator> const_iterator;
+
+        class iterator : public const_iterator_impl<typename StorageType::iterator>
+        {
+        public:
+            iterator(typename StorageType::iterator & iter) : const_iterator_impl(iter)
+            {}
+            template<typename other_type> iterator(const const_iterator_impl<other_type>& other) : m_item(other.m_item)
+            {}
+            template<typename other_type> iterator& operator =(const const_iterator_impl<other_type> &other)
+            {
+                m_item = other.m_item;
+                return *this;
+            }
+            iterator_item& operator*() {return m_item;}
+            iterator_item* operator->() {return &m_item;}
+        };
+
+        const_iterator begin() const
+        {
+            return const_iterator(m_rows.begin());
+        }
+
+        iterator begin()
+        {
+            return iterator(m_rows.begin());
+        }
+
+        const_iterator end() const
+        {
+            return const_iterator(m_rows.end());
+        }
+
+        iterator end()
+        {
+            return iterator(m_rows.end());
+        }
+
+
+
     };
 
 
@@ -240,8 +371,8 @@ namespace dXreimpl
         {
             throw new std::invalid_argument("Duplicate key");
         }
-        m_rows[key] = std::unique_ptr<AttributeRowImpl>(new AttributeRowImpl(*this));
-        return *m_rows[key];
+        auto res = m_rows.insert(std::make_pair(key, std::unique_ptr<AttributeRowImpl>(new AttributeRowImpl(*this))));
+        return *res.first->second;
     }
 
     template<class RowKeyType>
@@ -382,6 +513,20 @@ namespace dXreimpl
         }
         return colIndex;
     }
+
+//    template <class RowKeyType>
+//    AttributeRow& AttributeTable<RowKeyType>::iterator_item_impl<typename AttributeTable<RowKeyType>::StorageType::iterator>::getRow()
+//    {
+//        return *m_iter->second;
+//    }
+
+//    template <class RowKeyType>
+//    AttributeRow& AttributeTable<RowKeyType>::iterator_item_impl<typename AttributeTable<RowKeyType>::StorageType::const_iterator>::getRow()
+//    {
+//        throw std::bad_exception("Should not be able to call this on a const iterator");
+//    }
+
+
 
 
 }

@@ -205,3 +205,62 @@ TEST_CASE("test attribute table")
     REQUIRE_THROWS_AS(table.getColumnIndex("col2"), std::out_of_range);
 
 }
+
+TEST_CASE("attibute table iterations")
+{
+    using namespace dXreimpl;
+    AttributeTable<SerialisedPixelRef> table;
+
+    table.insertOrResetColumn("col1");
+    table.getOrInsertColumn("col2");
+
+    auto& row = table.addRow(SerialisedPixelRef(0));
+    row.setValue(0, 0.5);
+    auto& row2 = table.addRow(SerialisedPixelRef(1));
+    row2.setValue(0, 1.0);
+
+    AttributeTable<SerialisedPixelRef>::iterator iter = table.begin();
+    REQUIRE((*iter).getKey().value == 0);
+    REQUIRE(iter->getRow().getValue(0) == Approx(0.5));
+    iter++;
+    REQUIRE((*iter).getKey().value == 1);
+    REQUIRE(iter->getRow().getValue(0) == Approx(1.0));
+    iter++;
+
+    REQUIRE(iter == table.end());
+
+    for( auto& item :  table)
+    {
+        item.getRow().setValue(1, 2.0);
+    }
+
+    REQUIRE(table.getRow(0).getValue(1) == Approx(2.0));
+    REQUIRE(table.getRow(1).getValue(1) == Approx(2.0));
+
+    const AttributeTable<SerialisedPixelRef>& const_table = table;
+
+    auto citer = const_table.begin();
+    REQUIRE((*citer).getKey().value == 0);
+    REQUIRE(citer->getRow().getValue(0) == Approx(0.5));
+    citer++;
+    REQUIRE((*citer).getKey().value == 1);
+    REQUIRE(citer->getRow().getValue(0) == Approx(1.0));
+    citer++;
+
+    auto cend = const_table.end();
+    REQUIRE(citer == cend);
+    REQUIRE(citer == table.end());
+
+    AttributeTable<SerialisedPixelRef>::iterator foo(iter);
+    AttributeTable<SerialisedPixelRef>::const_iterator cfoo(iter);
+    AttributeTable<SerialisedPixelRef>::const_iterator ccfoo(citer);
+
+    REQUIRE(iter == foo);
+    REQUIRE(cfoo == iter);
+    REQUIRE(ccfoo == iter);
+
+    cfoo = table.begin();
+    foo = table.end();
+
+    cfoo = foo;
+}
