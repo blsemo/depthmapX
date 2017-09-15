@@ -69,7 +69,8 @@ HEADERS += \
     gridproperties.h \
     isovistdef.h \
     mgraph_consts.h \
-    attributetable.h
+    attributetable.h \
+    attributetableindex.h
 
 DISTFILES += \
     salascript-tests.txt

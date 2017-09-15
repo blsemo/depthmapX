@@ -172,7 +172,7 @@ namespace dXreimpl
     {
         SerialisedPixelRef(int val) : value(val)
         {}
-        const int value;
+        int value;
 
         bool operator < (const SerialisedPixelRef& other ) const
         {
@@ -199,6 +199,7 @@ namespace dXreimpl
         void removeRow(const RowKeyType& key);
         void removeColumn(size_t colIndex);
         void renameColumn(const std::string& oldName, const std::string& newName);
+        size_t getNumRows() const { return m_rows.size(); };
 
 
 
@@ -358,9 +359,6 @@ namespace dXreimpl
         {
             return iterator(m_rows.end());
         }
-
-
-
     };
 
 // Below here is the implementation of AttributeTable methods - needs to be header only as it is templated.
