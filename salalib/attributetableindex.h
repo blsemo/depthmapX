@@ -49,9 +49,9 @@ namespace dXreimpl
     class AttributeIndexItem : public ConstAttributeIndexItem<RowKeyType>
     {
     public:
-        AttributeIndexItem( const RowKeyType &k, double v, AttributeRow &r) : ConstAttributeIndexItem(k,v,r), mutable_row(&r)
+        AttributeIndexItem( const RowKeyType &k, double v, AttributeRow &r) : ConstAttributeIndexItem<RowKeyType>(k,v,r), mutable_row(&r)
         {}
-        AttributeIndexItem( const AttributeIndexItem &other) : ConstAttributeIndexItem(other), mutable_row(other.mutable_row)
+        AttributeIndexItem( const AttributeIndexItem &other) : ConstAttributeIndexItem<RowKeyType>(other), mutable_row(other.mutable_row)
         {}
         AttributeIndexItem &operator = (const AttributeIndexItem &other)
         {
@@ -59,7 +59,7 @@ namespace dXreimpl
             {
                 return *this;
             }
-            ConstAttributeIndexItem::operator =(other);
+            ConstAttributeIndexItem<RowKeyType>::operator =(other);
             mutable_row = other.mutable_row;
             return *this;
         }
@@ -67,8 +67,8 @@ namespace dXreimpl
         AttributeRow *mutable_row;
     };
 
-    template<typename T1, typename T2>
-    bool operator < (const ConstAttributeIndexItem<T1> &lhs, const ConstAttributeIndexItem<T2> &rhs)
+    template<typename T1>
+    bool operator < (const ConstAttributeIndexItem<T1> &lhs, const ConstAttributeIndexItem<T1> &rhs)
     {
         return lhs.value < rhs.value;
     }
