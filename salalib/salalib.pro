@@ -40,7 +40,8 @@ SOURCES += \
     entityparsing.cpp \
     linkutils.cpp \
     gridproperties.cpp \
-    attributetable.cpp
+    attributetable.cpp \
+    layermanagerimpl.cpp
 
 HEADERS += \
     attributes.h \
@@ -70,7 +71,9 @@ HEADERS += \
     isovistdef.h \
     mgraph_consts.h \
     attributetable.h \
-    attributetableindex.h
+    attributetableindex.h \
+    layermanager.h \
+    layermanagerimpl.h
 
 DISTFILES += \
     salascript-tests.txt
