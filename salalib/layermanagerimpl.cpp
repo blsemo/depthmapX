@@ -21,16 +21,20 @@ LayerManagerImpl::LayerManagerImpl() : m_visibleLayers(1)
     m_layerLookup["Everything"] = 0;
 }
 
-bool LayerManagerImpl::addLayer(const std::string &layerName)
+size_t LayerManagerImpl::addLayer(const std::string &layerName)
 {
     size_t newLayerIndex = m_layers.size();
     if (newLayerIndex > 63)
     {
-        return false;
+        throw OutOfLayersException();
+    }
+    auto result = m_layerLookup.insert(std::make_pair(layerName, newLayerIndex));
+    if (!result.second)
+    {
+        throw DuplicateKeyException(std::string("Trying to insert duplicate key: ") + layerName);
     }
     m_layers.push_back(layerName);
-    m_layerLookup[layerName] = newLayerIndex;
-    return true;
+    return newLayerIndex;
 }
 
 const std::string& LayerManagerImpl::getLayerName(size_t index) const

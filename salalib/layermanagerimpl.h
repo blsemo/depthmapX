@@ -25,7 +25,7 @@ class LayerManagerImpl : public LayerManager
     // LayerManager interface
 public:
     LayerManagerImpl();
-    virtual bool addLayer(const std::string &layerName);
+    virtual size_t addLayer(const std::string &layerName);
     virtual const std::string& getLayerName(size_t index) const;
     virtual size_t getLayerIndex(const std::string &layerName) const;
     virtual void setLayerVisible(size_t layerIndex, bool visible);

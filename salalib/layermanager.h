@@ -20,7 +20,7 @@ class LayerManager
 {
 public:
     typedef int64_t KeyType;
-    virtual bool addLayer(const std::string &layerName) = 0;
+    virtual size_t addLayer(const std::string &layerName) = 0;
     virtual const std::string& getLayerName(size_t index) const = 0;
     virtual size_t getLayerIndex(const std::string &layerName) const = 0;
     virtual void setLayerVisible( size_t layerIndex, bool visible = true ) = 0;
@@ -30,6 +30,27 @@ public:
     virtual bool isVisible( const KeyType &key ) const = 0;
 
     virtual ~LayerManager(){}
-};
 
+public:
+    class OutOfLayersException : std::exception
+    {
+    public:
+        OutOfLayersException()
+        {}
+        OutOfLayersException(const std::string &message) : std::exception(message.c_str())
+        {
+        }
+    };
+
+    class DuplicateKeyException : std::exception
+    {
+    public:
+        DuplicateKeyException()
+        {}
+        DuplicateKeyException(const std::string &message) : std::exception(message.c_str())
+        {
+        }
+    };
+
+};
 

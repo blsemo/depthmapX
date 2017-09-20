@@ -18,7 +18,6 @@
 
 TEST_CASE("Test layer manager")
 {
-    int64_t result = ((int64_t)1) & ((int64_t)2);
     LayerManagerImpl manager;
     REQUIRE(manager.isVisible(1));
     REQUIRE(manager.getLayerName(0) == "Everything");
@@ -26,7 +25,9 @@ TEST_CASE("Test layer manager")
     REQUIRE(manager.getLayerIndex("Everything") == 0);
     REQUIRE(manager.getKey(0) == 1);
 
-    REQUIRE(manager.addLayer("some layer"));
+
+    size_t index1 = manager.addLayer("some layer");
+    REQUIRE(index1 == 1);
     REQUIRE_FALSE(manager.isVisible(2));
     REQUIRE_FALSE(manager.isLayerVisible(1));
     REQUIRE(manager.getLayerName(1) == "some layer");
@@ -38,7 +39,8 @@ TEST_CASE("Test layer manager")
     REQUIRE_FALSE(manager.isVisible(1));
     REQUIRE(manager.isVisible(2));
 
-    REQUIRE(manager.addLayer("another layer"));
+    size_t index2 = manager.addLayer("another layer");
+    REQUIRE(index2 == 2);
     REQUIRE(manager.getLayerName(2) == "another layer");
     REQUIRE(manager.getLayerIndex("another layer") == 2);
     REQUIRE_FALSE(manager.isLayerVisible(2));
@@ -67,6 +69,8 @@ TEST_CASE("Test layer manager")
     REQUIRE(manager.isVisible(1));
     REQUIRE_FALSE(manager.isVisible(2));
     REQUIRE_FALSE(manager.isVisible(4));
+
+    REQUIRE_THROWS_AS(manager.addLayer("another layer"), LayerManager::DuplicateKeyException);
 
 
 
