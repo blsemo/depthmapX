@@ -17,7 +17,8 @@
 #include "attributetable.h"
 
 namespace dXreimpl{
-    void pushSelectionToLayer(AttributeTable &table, LayerManager& layerManager, const std::string &layerName)
+    template<typename RowKeyType>
+    inline void pushSelectionToLayer(AttributeTable<RowKeyType> &table, LayerManager& layerManager, const std::string &layerName)
     {
         size_t layerIndex = layerManager.addLayer(layerName);
         LayerManager::KeyType layerKey = layerManager.getKey(layerIndex);
