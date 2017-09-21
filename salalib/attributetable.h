@@ -163,6 +163,9 @@ namespace dXreimpl
         void addColumn();
         void removeColumn(size_t index);
 
+        void read(std::istream &stream, int version);
+        void write(std::ostream &stream);
+
     private:
         std::vector<float> m_data;
         const AttributeColumnManager& m_colManager;

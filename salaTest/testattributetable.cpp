@@ -145,6 +145,24 @@ TEST_CASE("test attribute row")
     REQUIRE(row.getValue(1) == -1.0f);
     REQUIRE(row.getValue(0) == Approx(1.2f));
     REQUIRE_THROWS_AS(row.getValue(2), std::out_of_range);
+
+    //test reading/writing
+    SelfCleaningFile scf("rowfile.bin");
+    {
+        std::ofstream outfile(scf.Filename());
+        row.write(outfile);
+    }
+    Mock<AttributeColumnManager> copiedColMan;
+    When(Method(copiedColMan,getNumColumns)).Return(2);
+    AttributeRowImpl copiedRow(copiedColMan.get());
+    {
+        std::ifstream infile(scf.Filename());
+        copiedRow.read(infile, METAGRAPH_VERSION);
+    }
+
+    REQUIRE(copiedRow.getValue(0) == Approx(1.2f));
+
+
 }
 
 //{// mock the layer manager to check that the visibility works correctly

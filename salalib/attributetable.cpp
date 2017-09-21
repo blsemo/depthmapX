@@ -17,6 +17,7 @@
 #include "attributetable.h"
 #include "vertex.h" // required for DisplayParams. Blergh!
 #include <genlib/stringutils.h>
+#include <genlib/vectorhelpers.h>
 
 #include <sstream>
 
@@ -193,6 +194,21 @@ void dXreimpl::AttributeRowImpl::removeColumn(size_t index)
 {
     checkIndex(index);
     m_data.erase(m_data.begin() + index);
+}
+
+void dXreimpl::AttributeRowImpl::read(istream &stream, int version)
+{
+    if( version > VERSION_MAP_LAYERS)
+    {
+        stream.read((char *)&m_layerKey, sizeof(m_layerKey));
+    }
+    dXvector::readIntoVector(stream, m_data);
+}
+
+void dXreimpl::AttributeRowImpl::write(ostream &stream)
+{
+    stream.write((char *)&m_layerKey, sizeof(m_layerKey));
+    dXvector::writeVector(stream, m_data);
 }
 
 void dXreimpl::AttributeRowImpl::checkIndex(size_t index) const
