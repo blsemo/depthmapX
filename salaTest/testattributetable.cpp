@@ -19,6 +19,7 @@
 #include <cliTest/selfcleaningfile.h>
 #include <fstream>
 #include <salalib/mgraph_consts.h>
+#include <salalib/layermanagerimpl.h>
 
 TEST_CASE("test attribute column")
 {
@@ -165,16 +166,6 @@ TEST_CASE("test attribute row")
 
 }
 
-//{// mock the layer manager to check that the visibility works correctly
-//    When(Method(layMan,isVisible)).Do([](int64_t v)->bool{REQUIRE(v == 1);return true;}).Do([](int64_t v)->bool{REQUIRE(v == 5); return true;});
-//    When(Method(layMan, getKey).Using(3)).AlwaysReturn(4);
-
-
-//    REQUIRE(row.isVisible());
-//    row.addLayer(3);
-//    REQUIRE(row.isVisible());
-//}
-
 TEST_CASE("test attribute table")
 {
     using namespace dXreimpl;
@@ -274,6 +265,14 @@ TEST_CASE("test attribute table")
         REQUIRE_FALSE(item.getRow().isSelected());
     }
 
+    // check read/write
+    LayerManagerImpl layerManager;
+    SelfCleaningFile scf("tablefile.bin");
+    {
+        std::ofstream outfile(scf.Filename());
+        table.write(outfile, layerManager);
+    }
+
 }
 
 TEST_CASE("attibute table iterations")
@@ -340,5 +339,110 @@ TEST_CASE("attibute table iterations")
 
     REQUIRE(table.getRow(0).getValue(1) == Approx(2.2));
     REQUIRE(table.getRow(1).getValue(1) == Approx(3.2));
+}
+
+#include "salalib/attributes.h"
+#include <salalib/attributetablehelpers.h>
+
+TEST_CASE("Attribute Table - serialisation")
+{
+    LayerManagerImpl layerManager;
+    layerManager.addLayer("extra layer");
+    REQUIRE(layerManager.getLayerIndex("extra layer") == 1);
+
+    dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef> newTable;
+    newTable.getOrInsertColumn("foo");
+    newTable.getOrInsertColumn("bar");
+
+    auto& row = newTable.addRow(0);
+    auto& row2 = newTable.addRow(10);
+
+    row.setValue(0,1.0f);
+    row.setValue(1,2.0f);
+
+    row2.setValue(0, 11.0f);
+    row2.setValue(1, 12.0f);
+    row2.setSelection(true);
+
+    dXreimpl::pushSelectionToLayer(newTable, layerManager, "sel layer");
+    REQUIRE(isObjectVisiblie(layerManager, row2));
+    REQUIRE_FALSE(isObjectVisiblie(layerManager, row));
+
+
+
+    SelfCleaningFile newTableFile("newtable.bin");
+    SelfCleaningFile legacyTableFile("legacytable.bin");
+
+    {
+        std::ofstream outfile(newTableFile.Filename());
+        newTable.write(outfile, layerManager);
+    }
+
+    dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef> copyTable;
+    LayerManagerImpl copyLayerManager;
+    {
+        std::ifstream infile(newTableFile.Filename());
+        copyTable.read(infile, copyLayerManager, METAGRAPH_VERSION);
+    }
+
+    auto& copyRow = copyTable.getRow(0);
+    REQUIRE(copyRow.getValue(0) == Approx(1.0f));
+    REQUIRE(copyRow.getValue(1) == Approx(2.0f));
+
+    auto& copyRow2 = copyTable.getRow(10);
+    REQUIRE(copyRow2.getValue(0) == Approx(11.0f));
+    REQUIRE(copyRow2.getValue(1) == Approx(12.0f));
+
+    REQUIRE(isObjectVisiblie(copyLayerManager, copyRow2));
+    REQUIRE_FALSE(isObjectVisiblie(copyLayerManager, copyRow));
+
+
+    AttributeTable oldTable;
+    {
+        ifstream infile(newTableFile.Filename());
+        oldTable.read(infile, METAGRAPH_VERSION);
+    }
+
+    int row1Ind = oldTable.getRowid(0);
+    REQUIRE(row1Ind == 0);
+    int row2Ind = oldTable.getRowid(10);
+    REQUIRE(row2Ind == 1);
+
+    REQUIRE(oldTable.getValue(0, "foo") == Approx(1.0));
+    REQUIRE(oldTable.getValue(1, "foo") == Approx(11.0));
+    REQUIRE(oldTable.getValue(0, "bar") == Approx(2.0));
+    REQUIRE(oldTable.getValue(1, "bar") == Approx(12.0));
+
+    REQUIRE(oldTable.getColumnIndex("foo") == 1);
+
+    REQUIRE(oldTable.isVisible(1));
+    REQUIRE_FALSE(oldTable.isVisible(0));
+
+
+    {
+        std::ofstream outfile(legacyTableFile.Filename());
+        oldTable.write(outfile, METAGRAPH_VERSION);
+    }
+
+
+    dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef> roundTripTable;
+    LayerManagerImpl roundTripManager;
+    {
+        std::ifstream infile(legacyTableFile.Filename());
+        roundTripTable.read(infile, roundTripManager, METAGRAPH_VERSION);
+    }
+
+    auto& roundtripRow = roundTripTable.getRow(0);
+    REQUIRE(roundtripRow.getValue(0) == Approx(1.0f));
+    REQUIRE(roundtripRow.getValue(1) == Approx(2.0f));
+
+    auto& roundtripRow2 = roundTripTable.getRow(10);
+    REQUIRE(roundtripRow2.getValue(0) == Approx(11.0f));
+    REQUIRE(roundtripRow2.getValue(1) == Approx(12.0f));
+
+    REQUIRE(isObjectVisiblie(roundTripManager, roundtripRow2));
+    REQUIRE_FALSE(isObjectVisiblie(roundTripManager, roundtripRow));
+
+
 }
 

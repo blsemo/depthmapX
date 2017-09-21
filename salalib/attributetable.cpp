@@ -83,7 +83,7 @@ void dXreimpl::AttributeColumnImpl::setName(const std::string &name)
     m_name = name;
 }
 
-void dXreimpl::AttributeColumnImpl::read(istream &stream, int version)
+size_t dXreimpl::AttributeColumnImpl::read(istream &stream, int version)
 {
     m_name = dXstring::readString(stream);
     float val;
@@ -99,8 +99,8 @@ void dXreimpl::AttributeColumnImpl::read(istream &stream, int version)
     {
         m_stats.total = 0.0;
     }
-    int dummy;
-    stream.read((char *)&dummy, sizeof(int)); // physical column is obsolete
+    int physical_column;
+    stream.read((char *)&physical_column, sizeof(int)); // physical column is obsolete
     stream.read((char *)&m_hidden, sizeof(bool));
     if (version >= VERSION_ATTRIBUTE_LOCKING)
     {
@@ -126,6 +126,7 @@ void dXreimpl::AttributeColumnImpl::read(istream &stream, int version)
     if (version >= VERSION_STORE_COLUMN_CREATOR && version < VERSION_FORGET_COLUMN_CREATOR) {
        std::string dummy_creator = dXstring::readString(stream);
     }
+    return physical_column;
 }
 
 void dXreimpl::AttributeColumnImpl::write(std::ostream &stream, int physicalCol)

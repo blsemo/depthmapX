@@ -16,12 +16,14 @@
 
 #pragma once
 #include "layermanager.h"
+#include "vertex.h"
 #include <string>
 #include <map>
 #include <vector>
 #include <memory>
 #include <sstream>
 #include <iterator>
+#include <algorithm>
 
 
 namespace dXreimpl
@@ -114,6 +116,8 @@ namespace dXreimpl
         {
         }
 
+        AttributeColumnImpl() : m_locked(false), m_hidden(false)
+        {}
         virtual const std::string &getName() const;
         virtual bool isLocked() const;
         virtual void setLock(bool lock);
@@ -130,7 +134,8 @@ namespace dXreimpl
         mutable AttributeColumnStats m_stats;
 
         void setName(const std::string &name);
-        void read(std::istream &stream, int version);
+        // returns the physical column for comaptibility with the old attribute table
+        size_t read(std::istream &stream, int version);
         void write(std::ostream& stream, int physicalCol);
 
     private:
@@ -191,6 +196,16 @@ namespace dXreimpl
         {
             return value < other.value;
         }
+
+        void write(std::ostream &stream) const
+        {
+            stream.write((char *)&value, sizeof(int));
+        }
+
+        void read(std::istream &stream)
+        {
+            stream.read((char *)&value, sizeof(int));
+        }
     };
 
     ///
@@ -214,8 +229,10 @@ namespace dXreimpl
         void removeRow(const RowKeyType& key);
         void removeColumn(size_t colIndex);
         void renameColumn(const std::string& oldName, const std::string& newName);
-        size_t getNumRows() const { return m_rows.size(); };
+        size_t getNumRows() const { return m_rows.size(); }
         void deselectAllRows();
+        void read(std::istream &stream, LayerManager &layerManager, int version);
+        void write(std::ostream &stream, const LayerManager &layerManager);
 
    // interface AttributeColumnManager
     public:
@@ -501,6 +518,63 @@ namespace dXreimpl
         for (auto& row : m_rows)
         {
             row.second->setSelection(false);
+        }
+    }
+
+    template<typename RowKeyType>
+    void AttributeTable<RowKeyType>::read(std::istream &stream, LayerManager &layerManager, int version)
+    {
+        if (version >= VERSION_MAP_LAYERS )
+        {
+            layerManager.read(stream);
+        }
+        int colcount;
+        stream.read((char *)&colcount, sizeof(colcount));
+        std::map<size_t, AttributeColumnImpl> tmp;
+        for (int j = 0; j < colcount; j++) {
+            AttributeColumnImpl col("");
+            tmp[col.read(stream, METAGRAPH_VERSION)] = col;
+        }
+        for (auto & c : tmp)
+        {
+            m_columnMapping[c.second.getName()] = m_columns.size();
+            m_columns.push_back(c.second);
+        }
+
+        int rowcount, rowkey;
+        stream.read((char *)&rowcount, sizeof(rowcount));
+        for (int i = 0; i < rowcount; i++) {
+           stream.read((char *)&rowkey, sizeof(rowkey));
+           auto row = std::unique_ptr<AttributeRowImpl>(new AttributeRowImpl(*this));
+           row->read(stream, METAGRAPH_VERSION);
+           m_rows.insert(std::make_pair(rowkey,std::move(row)));
+        }
+
+        if (version >= VERSION_GATE_MAPS) {
+           // ref column display params
+           DisplayParams dp;
+           stream.read((char *)&dp,sizeof(dp));
+        }
+
+    }
+
+    template<typename RowKeyType>
+    void AttributeTable<RowKeyType>::write(std::ostream &stream, const LayerManager &layerManager)
+    {
+        layerManager.write(stream);
+        int colCount = m_columns.size();
+        stream.write((char *)&colCount, sizeof(int));
+        for (size_t i = 0; i < m_columns.size(); ++i)
+        {
+            m_columns[i].write(stream, i);
+        }
+
+        int rowcount = m_rows.size();
+        stream.write((char *)&rowcount, sizeof(int));
+        for ( auto &kvp : m_rows)
+        {
+            kvp.first.write(stream);
+            kvp.second->write(stream);
         }
     }
 
