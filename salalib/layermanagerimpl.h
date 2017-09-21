@@ -34,7 +34,6 @@ public:
     virtual KeyType getKey(size_t layerIndex) const;
     virtual bool isVisible(const KeyType &key) const;
 
-
 private:
     void checkIndex(size_t index) const;
 
@@ -42,6 +41,7 @@ private:
     int64_t m_visibleLayers;
     std::vector<std::string> m_layers;
     std::map<std::string, size_t> m_layerLookup;
+
 
 };
 

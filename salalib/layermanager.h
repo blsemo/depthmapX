@@ -16,6 +16,7 @@
 #pragma once;
 #include <string>
 
+
 class LayerManager
 {
 public:
@@ -54,3 +55,32 @@ public:
 
 };
 
+class LayerAware
+{
+public:
+    virtual void setLayerKey( const LayerManager::KeyType & key)
+    {
+        m_layerKey = key;
+    }
+
+    virtual const LayerManager::KeyType& getLayerKey() const
+    {
+        return m_layerKey;
+    }
+
+    virtual ~LayerAware(){}
+
+protected:
+    LayerManager::KeyType m_layerKey;
+};
+
+
+inline bool isObjectVisiblie(const LayerManager& manager, const LayerAware& object )
+{
+    return manager.isVisible(object.getLayerKey());
+}
+
+inline void addLayerToObject(const LayerManager& manager, LayerAware& object, const LayerManager::KeyType& layerKey)
+{
+    object.setLayerKey(object.getLayerKey() | layerKey);
+}

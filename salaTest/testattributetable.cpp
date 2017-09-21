@@ -42,7 +42,7 @@ TEST_CASE("test attribute column")
     REQUIRE(col.m_stats.visibleMin == -1.0);
     REQUIRE(col.m_stats.visibleTotal == -1.0);
 
-    col.updateStats(1.2);
+    col.updateStats(1.2f);
     REQUIRE(col.m_stats.max == Approx(1.2));
     REQUIRE(col.m_stats.min == Approx(1.2));
     REQUIRE(col.m_stats.total == Approx(1.2));
@@ -50,7 +50,7 @@ TEST_CASE("test attribute column")
     REQUIRE(col.m_stats.visibleMin == -1.0);
     REQUIRE(col.m_stats.visibleTotal == -1.0);
 
-    col.updateStats(2);
+    col.updateStats(2.0f);
     REQUIRE(col.m_stats.max == Approx(2.0));
     REQUIRE(col.m_stats.min == Approx(1.2));
     REQUIRE(col.m_stats.total == Approx(3.2));
@@ -58,7 +58,7 @@ TEST_CASE("test attribute column")
     REQUIRE(col.m_stats.visibleMin == -1.0);
     REQUIRE(col.m_stats.visibleTotal == -1.0);
 
-    col.updateStats(3,1.2);
+    col.updateStats(3.0f,1.2f);
     REQUIRE(col.m_stats.max == Approx(3.0));
     REQUIRE(col.m_stats.min == Approx(1.2));
     REQUIRE(col.m_stats.total == Approx(5));
@@ -86,25 +86,25 @@ TEST_CASE("test attribute row")
     When(Method(col2,updateStats)).AlwaysReturn();
 
     AttributeRowImpl row(colMan.get());
-    row.setValue("col1", 1.2);
-    REQUIRE(row.getValue("col1") == Approx(1.2));
-    REQUIRE(row.getValue(0) == Approx(1.2));
+    row.setValue("col1", 1.2f);
+    REQUIRE(row.getValue("col1") == Approx(1.2f));
+    REQUIRE(row.getValue(0) == Approx(1.2f));
 
-    row.setValue(1, 2.2);
-    REQUIRE(row.getValue("col2") == Approx(2.2));
-    REQUIRE(row.getValue(1) == Approx(2.2));
+    row.setValue(1, 2.2f);
+    REQUIRE(row.getValue("col2") == Approx(2.2f));
+    REQUIRE(row.getValue(1) == Approx(2.2f));
 
-    row.setValue(1, 3.2);
-    REQUIRE(row.getValue("col2") == Approx(3.2));
-    REQUIRE(row.getValue(1) == Approx(3.2));
+    row.setValue(1, 3.2f);
+    REQUIRE(row.getValue("col2") == Approx(3.2f));
+    REQUIRE(row.getValue(1) == Approx(3.2f));
 
 
-    Verify(Method(col1,updateStats).Using(1.2,0.0)).Once();
-    Verify(Method(col2,updateStats).Using(2.2,0.0)).Once();
-    Verify(Method(col2,updateStats).Using(3.2,2.2)).Once();
+    Verify(Method(col1,updateStats).Using(1.2f,0.0f)).Once();
+    Verify(Method(col2,updateStats).Using(2.2f,0.0f)).Once();
+    Verify(Method(col2,updateStats).Using(3.2f,2.2f)).Once();
 
-    REQUIRE_THROWS_AS(row.setValue("colx", 1.1), std::out_of_range);
-    REQUIRE_THROWS_AS(row.setValue(2, 1.2), std::out_of_range);
+    REQUIRE_THROWS_AS(row.setValue("colx", 1.1f), std::out_of_range);
+    REQUIRE_THROWS_AS(row.setValue(2, 1.2f), std::out_of_range);
     REQUIRE_THROWS_AS(row.getValue("colx"), std::out_of_range);
     REQUIRE_THROWS_AS(row.getValue(2), std::out_of_range);
 
@@ -112,17 +112,28 @@ TEST_CASE("test attribute row")
     // note that these do not affect the column manager - that will have to
     // be handled by the caller - that's why these are impl only!
     row.addColumn();
-    REQUIRE(row.getValue(2) == -1.0);
+    REQUIRE(row.getValue(2) == -1.0f);
 
     row.removeColumn(1);
-    REQUIRE(row.getValue(1) == -1.0);
-    REQUIRE(row.getValue(0) == Approx(1.2));
+    REQUIRE(row.getValue(1) == -1.0f);
+    REQUIRE(row.getValue(0) == Approx(1.2f));
     REQUIRE_THROWS_AS(row.getValue(2), std::out_of_range);
 }
+
+//{// mock the layer manager to check that the visibility works correctly
+//    When(Method(layMan,isVisible)).Do([](int64_t v)->bool{REQUIRE(v == 1);return true;}).Do([](int64_t v)->bool{REQUIRE(v == 5); return true;});
+//    When(Method(layMan, getKey).Using(3)).AlwaysReturn(4);
+
+
+//    REQUIRE(row.isVisible());
+//    row.addLayer(3);
+//    REQUIRE(row.isVisible());
+//}
 
 TEST_CASE("test attribute table")
 {
     using namespace dXreimpl;
+
     AttributeTable<SerialisedPixelRef> table;
 
     table.insertOrResetColumn("col1");
@@ -204,6 +215,20 @@ TEST_CASE("test attribute table")
 
     REQUIRE_THROWS_AS(table.getColumnIndex("col2"), std::out_of_range);
 
+    table.getRow(0).setSelection(true);
+
+    REQUIRE(table.getRow(0).isSelected());
+    auto iter = table.begin();
+    REQUIRE(iter->getRow().isSelected());
+    ++iter;
+    REQUIRE_FALSE(iter->getRow().isSelected());
+
+    table.deselectAllRows();
+    for (auto& item : table)
+    {
+        REQUIRE_FALSE(item.getRow().isSelected());
+    }
+
 }
 
 TEST_CASE("attibute table iterations")
@@ -271,3 +296,4 @@ TEST_CASE("attibute table iterations")
     REQUIRE(table.getRow(0).getValue(1) == Approx(2.2));
     REQUIRE(table.getRow(1).getValue(1) == Approx(3.2));
 }
+

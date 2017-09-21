@@ -110,6 +110,16 @@ void dXreimpl::AttributeRowImpl::setValue(size_t index, float value)
     m_colManager.getColumn(index).updateStats(value, oldVal);
 }
 
+void dXreimpl::AttributeRowImpl::setSelection(bool selected)
+{
+    m_selected = selected;
+}
+
+bool dXreimpl::AttributeRowImpl::isSelected() const
+{
+    return m_selected;
+}
+
 void dXreimpl::AttributeRowImpl::addColumn()
 {
     m_data.push_back(-1);

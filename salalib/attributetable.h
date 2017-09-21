@@ -15,6 +15,7 @@
 
 
 #pragma once
+#include "layermanager.h"
 #include <string>
 #include <map>
 #include <vector>
@@ -28,13 +29,15 @@ namespace dXreimpl
 ///
 /// Interface to an attribute row
 ///
-    class AttributeRow
+    class AttributeRow : public LayerAware
     {
     public:
         virtual float getValue(const std::string &column) const = 0;
         virtual float getValue(size_t index) const = 0;
         virtual void setValue(const std::string &column, float value ) = 0;
         virtual void setValue(size_t index, float value) = 0;
+        virtual void setSelection(bool selected) = 0;
+        virtual bool isSelected() const = 0;
 
         virtual ~AttributeRow(){}
     };
@@ -141,8 +144,9 @@ namespace dXreimpl
     class AttributeRowImpl : public AttributeRow
     {
     public:
-        AttributeRowImpl(const AttributeColumnManager& colManager) : m_data(colManager.getNumColumns(), -1.0), m_colManager(colManager)
+        AttributeRowImpl(const AttributeColumnManager& colManager) : m_data(colManager.getNumColumns(), -1.0), m_colManager(colManager), m_selected(false)
         {
+            m_layerKey = 1;
         }
 
         // AttributeRow interface
@@ -151,6 +155,8 @@ namespace dXreimpl
         virtual float getValue(size_t index) const;
         virtual void setValue(const std::string &column, float value);
         virtual void setValue(size_t index, float value);
+        virtual void setSelection(bool selected);
+        virtual bool isSelected() const;
 
         void addColumn();
         void removeColumn(size_t index);
@@ -158,8 +164,10 @@ namespace dXreimpl
     private:
         std::vector<float> m_data;
         const AttributeColumnManager& m_colManager;
+        bool m_selected;
 
         void checkIndex(size_t index) const;
+
     };
 
     ///
@@ -188,7 +196,9 @@ namespace dXreimpl
     {
         // AttributeTable "interface" - the actual table handling
     public:
-        AttributeTable();
+        AttributeTable(){}
+        AttributeTable(const AttributeTable& ) = delete;
+        AttributeTable& operator =(const AttributeTable&) = delete;
         AttributeRow& getRow(const RowKeyType& key );
         const AttributeRow& getRow(const RowKeyType& key) const;
         AttributeRow &addRow(const RowKeyType& key);
@@ -200,8 +210,7 @@ namespace dXreimpl
         void removeColumn(size_t colIndex);
         void renameColumn(const std::string& oldName, const std::string& newName);
         size_t getNumRows() const { return m_rows.size(); };
-
-
+        void deselectAllRows();
 
    // interface AttributeColumnManager
     public:
@@ -215,6 +224,7 @@ namespace dXreimpl
         StorageType m_rows;
         std::map<std::string, size_t> m_columnMapping;
         std::vector<AttributeColumnImpl> m_columns;
+        int64_t m_visibleLayers;
 
     private:
         void checkColumnIndex(size_t index) const;
@@ -364,12 +374,6 @@ namespace dXreimpl
 // Below here is the implementation of AttributeTable methods - needs to be header only as it is templated.
 
     template<class RowKeyType>
-    AttributeTable<RowKeyType>::AttributeTable()
-    {
-
-    }
-
-    template<class RowKeyType>
     AttributeRow &AttributeTable<RowKeyType>::getRow(const RowKeyType &key)
     {
         auto iter = m_rows.find(key);
@@ -484,6 +488,15 @@ namespace dXreimpl
         m_columnMapping.erase(iter);
         m_columnMapping[newName] = colIndex;
 
+    }
+
+    template<typename RowKeyType>
+    void AttributeTable<RowKeyType>::deselectAllRows()
+    {
+        for (auto& row : m_rows)
+        {
+            row.second->setSelection(false);
+        }
     }
 
     template<class RowKeyType>

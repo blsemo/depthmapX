@@ -73,7 +73,8 @@ HEADERS += \
     attributetable.h \
     attributetableindex.h \
     layermanager.h \
-    layermanagerimpl.h
+    layermanagerimpl.h \
+    attributetablehelpers.h
 
 DISTFILES += \
     salascript-tests.txt
