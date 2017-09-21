@@ -34,6 +34,9 @@ public:
     virtual KeyType getKey(size_t layerIndex) const;
     virtual bool isVisible(const KeyType &key) const;
 
+    virtual void read(std::istream& stream);
+    virtual void write(std::ostream& stream ) const;
+
 private:
     void checkIndex(size_t index) const;
 

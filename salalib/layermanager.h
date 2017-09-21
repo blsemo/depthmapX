@@ -16,6 +16,7 @@
 #pragma once;
 #include <string>
 #include <genlib/exceptions.h>
+#include <iostream>
 
 
 class LayerManager
@@ -30,6 +31,9 @@ public:
 
     virtual KeyType getKey(size_t layerIndex) const = 0;
     virtual bool isVisible( const KeyType &key ) const = 0;
+
+    virtual void read(std::istream& stream) = 0;
+    virtual void write(std::ostream& stream) const = 0;
 
     virtual ~LayerManager(){}
 

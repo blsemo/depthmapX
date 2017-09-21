@@ -14,6 +14,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "layermanagerimpl.h"
+#include <genlib/stringutils.h>
 
 LayerManagerImpl::LayerManagerImpl() : m_visibleLayers(1)
 {
@@ -84,6 +85,42 @@ bool LayerManagerImpl::isLayerVisible(size_t layerIndex) const
 bool LayerManagerImpl::isVisible(const KeyType &key) const
 {
     return (m_visibleLayers & key) != 0;
+}
+
+void LayerManagerImpl::read(std::istream &stream)
+{
+    m_layerLookup.clear();
+    m_layers.clear();
+    KeyType dummy;
+    stream.read((char *)&dummy, sizeof(dummy));
+    stream.read((char *)&m_visibleLayers, sizeof(m_visibleLayers));
+    int count;
+    stream.read((char *)&count, sizeof(int));
+    for( size_t i = 0; i < count; ++i)
+    {
+        stream.read((char *)&dummy, sizeof(dummy));
+        m_layers.push_back(dXstring::readString(stream));
+        m_layerLookup[m_layers.back()] = i;
+    }
+}
+
+void LayerManagerImpl::write(std::ostream &stream) const
+{
+    KeyType availableLayers = 0;
+    for (size_t i = m_layers.size(); i < 64; ++i)
+    {
+        availableLayers |= ((KeyType)1) << i;
+    }
+    stream.write((const char *)&availableLayers, sizeof(KeyType));
+    stream.write((const char *)&m_visibleLayers, sizeof(KeyType));
+    int size_as_int = (int)m_layers.size();
+    stream.write((const char *)&size_as_int, sizeof(int));
+    for ( size_t i = 0; i < m_layers.size(); ++i)
+    {
+        KeyType key = ((KeyType)1) << i;
+        stream.write((const char *)&key, sizeof(KeyType));
+        dXstring::writeString(stream,m_layers[i]);
+    }
 }
 
 

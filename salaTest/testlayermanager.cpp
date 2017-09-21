@@ -15,6 +15,8 @@
 
 #include <catch.hpp>
 #include <salalib/layermanagerimpl.h>
+#include <cliTest/selfcleaningfile.h>
+#include <fstream>
 
 TEST_CASE("Test layer manager")
 {
@@ -72,8 +74,23 @@ TEST_CASE("Test layer manager")
 
     REQUIRE_THROWS_AS(manager.addLayer("another layer"), LayerManager::DuplicateKeyException);
 
+    // test read and write
+    SelfCleaningFile serialisedManager("manager.bin");
+    {
+        std::ofstream file(serialisedManager.Filename());
+        manager.write(file);
+    }
 
-
+    LayerManagerImpl copy;
+    {
+        std::ifstream file(serialisedManager.Filename());
+        copy.read(file);
+    }
+    REQUIRE(copy.getLayerName(1) == "some layer");
+    REQUIRE(copy.getLayerIndex("some layer") == 1);
+    REQUIRE(copy.isVisible(1));
+    REQUIRE_FALSE(copy.isVisible(2));
+    REQUIRE_FALSE(copy.isVisible(4));
 
 
 }
