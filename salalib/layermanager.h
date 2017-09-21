@@ -15,6 +15,7 @@
 
 #pragma once;
 #include <string>
+#include <genlib/exceptions.h>
 
 
 class LayerManager
@@ -33,22 +34,22 @@ public:
     virtual ~LayerManager(){}
 
 public:
-    class OutOfLayersException : std::exception
+    class OutOfLayersException : depthmapX::BaseException
     {
     public:
         OutOfLayersException()
         {}
-        OutOfLayersException(const std::string &message) : std::exception(message.c_str())
+        OutOfLayersException(const std::string &message) : depthmapX::BaseException(message.c_str())
         {
         }
     };
 
-    class DuplicateKeyException : std::exception
+    class DuplicateKeyException : depthmapX::BaseException
     {
     public:
         DuplicateKeyException()
         {}
-        DuplicateKeyException(const std::string &message) : std::exception(message.c_str())
+        DuplicateKeyException(const std::string &message) : depthmapX::BaseException(message.c_str())
         {
         }
     };
