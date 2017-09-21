@@ -16,6 +16,9 @@
 #include "catch.hpp"
 #include "Catch/fakeit.hpp"
 #include <salalib/attributetable.h>
+#include <cliTest/selfcleaningfile.h>
+#include <fstream>
+#include <salalib/mgraph_consts.h>
 
 TEST_CASE("test attribute column")
 {
@@ -65,6 +68,30 @@ TEST_CASE("test attribute column")
     REQUIRE(col.m_stats.visibleMax == -1.0);
     REQUIRE(col.m_stats.visibleMin == -1.0);
     REQUIRE(col.m_stats.visibleTotal == -1.0);
+
+    // test read/write
+    SelfCleaningFile scf("column.bin");
+    {
+        std::ofstream outfile(scf.Filename());
+        col.write(outfile, 0);
+    }
+    AttributeColumnImpl copy("");
+    {
+        std::ifstream infile(scf.Filename());
+        copy.read(infile, METAGRAPH_VERSION);
+    }
+    REQUIRE(copy.getName() == "colName");
+    REQUIRE(copy.getFormula() == "");
+    REQUIRE(copy.isHidden());
+    REQUIRE(copy.isLocked());
+    REQUIRE(copy.m_stats.max == Approx(3.0));
+    REQUIRE(copy.m_stats.min == Approx(1.2));
+    REQUIRE(copy.m_stats.total == Approx(5));
+    REQUIRE(copy.m_stats.visibleMax == -1.0);
+    REQUIRE(copy.m_stats.visibleMin == -1.0);
+    REQUIRE(copy.m_stats.visibleTotal == -1.0);
+
+
 }
 
 TEST_CASE("test attribute row")

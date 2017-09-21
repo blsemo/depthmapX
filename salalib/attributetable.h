@@ -130,6 +130,8 @@ namespace dXreimpl
         mutable AttributeColumnStats m_stats;
 
         void setName(const std::string &name);
+        void read(std::istream &stream, int version);
+        void write(std::ostream& stream, int physicalCol);
 
     private:
         std::string m_name;

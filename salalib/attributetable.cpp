@@ -15,6 +15,8 @@
 
 
 #include "attributetable.h"
+#include "vertex.h" // required for DisplayParams. Blergh!
+#include <genlib/stringutils.h>
 
 #include <sstream>
 
@@ -78,6 +80,68 @@ void dXreimpl::AttributeColumnImpl::updateStats(float val, float oldVal) const
 void dXreimpl::AttributeColumnImpl::setName(const std::string &name)
 {
     m_name = name;
+}
+
+void dXreimpl::AttributeColumnImpl::read(istream &stream, int version)
+{
+    m_name = dXstring::readString(stream);
+    float val;
+    stream.read((char *)&val, sizeof(float));
+    m_stats.min = val;
+    stream.read((char *)&val, sizeof(float));
+    m_stats.max = val;
+    if(version >= VERSION_ATTRIBUTES_TABLE)
+    {
+        stream.read((char *)&m_stats.total, sizeof(double));
+    }
+    else
+    {
+        m_stats.total = 0.0;
+    }
+    int dummy;
+    stream.read((char *)&dummy, sizeof(int)); // physical column is obsolete
+    stream.read((char *)&m_hidden, sizeof(bool));
+    if (version >= VERSION_ATTRIBUTE_LOCKING)
+    {
+        stream.read((char *)&m_locked, sizeof(bool));
+    }
+    else
+    { // legacy reading shit - we probably need to keep it because someone will want to revisit their Depthmap files from 2001 at some point
+        if (m_name == "Connectivity" || m_name == "Connectivity (Degree)" || m_name == "Axial Line Ref" || m_name == "Segment Length" || m_name == "Line Length") {
+           m_locked = true;
+        }
+        else {
+           m_locked = false;
+        }
+    }
+
+    if (version >= VERSION_STORE_COLOR) {
+        DisplayParams dp;
+        stream.read((char*)&dp,sizeof(DisplayParams));
+    }
+    if (version >= VERSION_STORE_FORMULA) {
+       m_formula = dXstring::readString(stream);
+    }
+    if (version >= VERSION_STORE_COLUMN_CREATOR && version < VERSION_FORGET_COLUMN_CREATOR) {
+       std::string dummy_creator = dXstring::readString(stream);
+    }
+}
+
+void dXreimpl::AttributeColumnImpl::write(std::ostream &stream, int physicalCol)
+{
+    dXstring::writeString(stream, m_name);
+    float min = (float)m_stats.min;
+    float max = (float)m_stats.max;
+    stream.write((char *)&min, sizeof(float));
+    stream.write((char *)&max, sizeof(float));
+    stream.write((char *)&m_stats.total, sizeof(m_stats.total));
+    stream.write((char *)&physicalCol, sizeof(int));
+    stream.write((char *)&m_hidden, sizeof(bool));
+    stream.write((char *)&m_locked, sizeof(bool));
+    DisplayParams dp;
+    stream.write((char *)&dp, sizeof(DisplayParams));
+    dXstring::writeString(stream, m_formula);
+
 }
 
 
