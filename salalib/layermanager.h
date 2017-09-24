@@ -80,12 +80,12 @@ protected:
 };
 
 
-inline bool isObjectVisiblie(const LayerManager& manager, const LayerAware& object )
+inline bool isObjectVisible(const LayerManager& manager, const LayerAware& object )
 {
     return manager.isVisible(object.getLayerKey());
 }
 
-inline void addLayerToObject(const LayerManager& manager, LayerAware& object, const LayerManager::KeyType& layerKey)
+inline void addLayerToObject(LayerAware& object, const LayerManager::KeyType& layerKey)
 {
     object.setLayerKey(object.getLayerKey() | layerKey);
 }

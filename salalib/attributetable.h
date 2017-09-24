@@ -443,7 +443,7 @@ namespace dXreimpl
     AttributeColumn &AttributeTable<RowKeyType>::getColumn(size_t index)
     {
         checkColumnIndex(index);
-        return m_columns(index);
+        return m_columns[index];
     }
 
     template<class RowKeyType>
@@ -578,11 +578,11 @@ namespace dXreimpl
     void AttributeTable<RowKeyType>::write(std::ostream &stream, const LayerManager &layerManager)
     {
         layerManager.write(stream);
-        int colCount = m_columns.size();
+        int colCount = (int)m_columns.size();
         stream.write((char *)&colCount, sizeof(int));
         for (size_t i = 0; i < m_columns.size(); ++i)
         {
-            m_columns[i].write(stream, i);
+            m_columns[i].write(stream, (int)i);
         }
 
         int rowcount = m_rows.size();
@@ -592,7 +592,7 @@ namespace dXreimpl
             kvp.first.write(stream);
             kvp.second->write(stream);
         }
-        stream.write((const char *)m_displayParams, sizeof(DisplayParams));
+        stream.write((const char *)&m_displayParams, sizeof(DisplayParams));
     }
 
     template<class RowKeyType>

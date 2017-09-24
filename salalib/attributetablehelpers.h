@@ -25,9 +25,9 @@ namespace dXreimpl{
         for (auto & item: table)
         {
             auto& row = item.getRow();
-            if (isObjectVisiblie(layerManager, row) && row.isSelected())
+            if (isObjectVisible(layerManager, row) && row.isSelected())
             {
-                addLayerToObject(layerManager, item.getRow(), layerKey);
+                addLayerToObject(item.getRow(), layerKey);
             }
         }
 

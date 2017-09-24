@@ -351,8 +351,22 @@ TEST_CASE("Attribute Table - serialisation")
     REQUIRE(layerManager.getLayerIndex("extra layer") == 1);
 
     dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef> newTable;
-    newTable.getOrInsertColumn("foo");
-    newTable.getOrInsertColumn("bar");
+    size_t colIndex1 = newTable.getOrInsertColumn("foo");
+    size_t colIndex2 = newTable.getOrInsertColumn("bar");
+
+    DisplayParams overAllDp;
+    overAllDp.blue = 1.2f;
+    overAllDp.red  = 1.3f;
+
+    DisplayParams fooDp;
+    fooDp.blue = 2.2f;
+    fooDp.red = 2.3f;
+
+    DisplayParams barDp;
+
+    newTable.getColumn(colIndex1).setDisplayParams(fooDp);
+    newTable.getColumn(colIndex2).setDisplayParams(barDp);
+    newTable.setDisplayParams(overAllDp);
 
     auto& row = newTable.addRow(0);
     auto& row2 = newTable.addRow(10);
@@ -365,8 +379,8 @@ TEST_CASE("Attribute Table - serialisation")
     row2.setSelection(true);
 
     dXreimpl::pushSelectionToLayer(newTable, layerManager, "sel layer");
-    REQUIRE(isObjectVisiblie(layerManager, row2));
-    REQUIRE_FALSE(isObjectVisiblie(layerManager, row));
+    REQUIRE(isObjectVisible(layerManager, row2));
+    REQUIRE_FALSE(isObjectVisible(layerManager, row));
 
 
 
@@ -393,8 +407,14 @@ TEST_CASE("Attribute Table - serialisation")
     REQUIRE(copyRow2.getValue(0) == Approx(11.0f));
     REQUIRE(copyRow2.getValue(1) == Approx(12.0f));
 
-    REQUIRE(isObjectVisiblie(copyLayerManager, copyRow2));
-    REQUIRE_FALSE(isObjectVisiblie(copyLayerManager, copyRow));
+    REQUIRE(isObjectVisible(copyLayerManager, copyRow2));
+    REQUIRE_FALSE(isObjectVisible(copyLayerManager, copyRow));
+
+    REQUIRE(copyTable.getColumnIndex("foo") == colIndex1);
+    REQUIRE(copyTable.getColumnIndex("bar") == colIndex2);
+
+    REQUIRE(copyTable.getColumn(colIndex1).getDisplayParams().blue == Approx(fooDp.blue));
+    REQUIRE(copyTable.getDisplayParams().blue == Approx(overAllDp.blue));
 
 
     AttributeTable oldTable;
@@ -418,6 +438,9 @@ TEST_CASE("Attribute Table - serialisation")
     REQUIRE(oldTable.isVisible(1));
     REQUIRE_FALSE(oldTable.isVisible(0));
 
+    REQUIRE(oldTable.getDisplayParams(oldTable.getColumnIndex("foo")).blue == Approx(fooDp.blue));
+    REQUIRE(oldTable.getDisplayParams(-1).blue == Approx(overAllDp.blue));
+
 
     {
         std::ofstream outfile(legacyTableFile.Filename());
@@ -440,8 +463,11 @@ TEST_CASE("Attribute Table - serialisation")
     REQUIRE(roundtripRow2.getValue(0) == Approx(11.0f));
     REQUIRE(roundtripRow2.getValue(1) == Approx(12.0f));
 
-    REQUIRE(isObjectVisiblie(roundTripManager, roundtripRow2));
-    REQUIRE_FALSE(isObjectVisiblie(roundTripManager, roundtripRow));
+    REQUIRE(isObjectVisible(roundTripManager, roundtripRow2));
+    REQUIRE_FALSE(isObjectVisible(roundTripManager, roundtripRow));
+
+    REQUIRE(roundTripTable.getColumn(colIndex1).getDisplayParams().blue == Approx(fooDp.blue));
+    REQUIRE(roundTripTable.getDisplayParams().blue == Approx(overAllDp.blue));
 
 
 }

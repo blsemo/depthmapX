@@ -51,7 +51,7 @@ namespace dXvector
         {
             throw new depthmapX::RuntimeException("Vector exceeded max size for streaming");
         }
-        unsigned int length = vec.size();
+        unsigned int length = (unsigned int)vec.size();
         stream.write((char *)&length, sizeof(length));
         if (length > 0)
         {
