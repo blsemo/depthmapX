@@ -326,6 +326,7 @@ namespace dXreimpl
         template <typename iterator_type>
         class const_iterator_impl : public std::iterator<std::bidirectional_iterator_tag, iterator_item>
         {
+            template<typename other_type> friend class const_iterator_impl;
         public:
             const_iterator_impl( const iterator_type& iter) : m_item(iter)
             {}
@@ -346,7 +347,7 @@ namespace dXreimpl
             const iterator_item& operator*() const {return m_item;}
             const iterator_item* operator->() const {return &m_item;}
 
-        public:
+        protected:
             iterator_item_impl<iterator_type> m_item;
         };
 
