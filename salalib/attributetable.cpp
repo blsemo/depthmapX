@@ -117,8 +117,7 @@ size_t dXreimpl::AttributeColumnImpl::read(istream &stream, int version)
     }
 
     if (version >= VERSION_STORE_COLOR) {
-        DisplayParams dp;
-        stream.read((char*)&dp,sizeof(DisplayParams));
+        stream.read((char*)&m_displayParams,sizeof(DisplayParams));
     }
     if (version >= VERSION_STORE_FORMULA) {
        m_formula = dXstring::readString(stream);
@@ -140,8 +139,7 @@ void dXreimpl::AttributeColumnImpl::write(std::ostream &stream, int physicalCol)
     stream.write((char *)&physicalCol, sizeof(int));
     stream.write((char *)&m_hidden, sizeof(bool));
     stream.write((char *)&m_locked, sizeof(bool));
-    DisplayParams dp;
-    stream.write((char *)&dp, sizeof(DisplayParams));
+    stream.write((char *)&m_displayParams, sizeof(DisplayParams));
     dXstring::writeString(stream, m_formula);
 
 }

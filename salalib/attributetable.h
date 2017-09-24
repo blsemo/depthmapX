@@ -77,6 +77,9 @@ namespace dXreimpl
         virtual void setLock(bool lock) = 0;
         virtual bool isHidden() const = 0;
         virtual void setHidden(bool hidden) = 0;
+        virtual void setDisplayParams(const DisplayParams& params ) = 0;
+        virtual const DisplayParams& getDisplayParams() const = 0;
+
         virtual const std::string& getFormula() const = 0;
 
         virtual const AttributeColumnStats& getStats() const = 0;
@@ -125,6 +128,8 @@ namespace dXreimpl
         virtual void setHidden(bool hidden);
         virtual const std::string &getFormula() const;
         virtual const AttributeColumnStats& getStats() const;
+        virtual void setDisplayParams(const DisplayParams &params){ m_displayParams = params; }
+        virtual const DisplayParams &getDisplayParams() const{return m_displayParams;}
 
         virtual void updateStats(float val, float oldVal = 0.0f) const;
 
@@ -143,7 +148,7 @@ namespace dXreimpl
         bool m_locked;
         bool m_hidden;
         std::string m_formula;
-
+        DisplayParams m_displayParams;
     };
 
 
@@ -222,6 +227,7 @@ namespace dXreimpl
         AttributeRow& getRow(const RowKeyType& key );
         const AttributeRow& getRow(const RowKeyType& key) const;
         AttributeRow &addRow(const RowKeyType& key);
+        AttributeColumn& getColumn(size_t index);
         size_t insertOrResetColumn(const std::string& columnName, const std::string &formula = std::string());
         size_t insertOrResetLockedColumn(const std::string& columnName, const std::string &formula = std::string());
         size_t getOrInsertColumn(const std::string& columnName, const std::string &formula = std::string());
@@ -231,6 +237,8 @@ namespace dXreimpl
         void renameColumn(const std::string& oldName, const std::string& newName);
         size_t getNumRows() const { return m_rows.size(); }
         void deselectAllRows();
+        const DisplayParams& getDisplayParams() const { return m_displayParams; }
+        void setDisplayParams(const DisplayParams& params){m_displayParams = params;}
         void read(std::istream &stream, LayerManager &layerManager, int version);
         void write(std::ostream &stream, const LayerManager &layerManager);
 
@@ -247,6 +255,7 @@ namespace dXreimpl
         std::map<std::string, size_t> m_columnMapping;
         std::vector<AttributeColumnImpl> m_columns;
         int64_t m_visibleLayers;
+        DisplayParams m_displayParams;
 
     private:
         void checkColumnIndex(size_t index) const;
@@ -429,6 +438,13 @@ namespace dXreimpl
         return *res.first->second;
     }
 
+    template<typename RowKeyType>
+    AttributeColumn &AttributeTable<RowKeyType>::getColumn(size_t index)
+    {
+        checkColumnIndex(index);
+        return m_columns(index);
+    }
+
     template<class RowKeyType>
     size_t AttributeTable<RowKeyType>::insertOrResetColumn(const std::string &columnName, const std::string &formula)
     {
@@ -552,8 +568,7 @@ namespace dXreimpl
 
         if (version >= VERSION_GATE_MAPS) {
            // ref column display params
-           DisplayParams dp;
-           stream.read((char *)&dp,sizeof(dp));
+           stream.read((char *)&m_displayParams,sizeof(DisplayParams));
         }
 
     }
@@ -576,6 +591,7 @@ namespace dXreimpl
             kvp.first.write(stream);
             kvp.second->write(stream);
         }
+        stream.write((const char *)m_displayParams, sizeof(DisplayParams));
     }
 
     template<class RowKeyType>
