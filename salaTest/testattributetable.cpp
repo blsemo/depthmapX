@@ -351,7 +351,7 @@ TEST_CASE("Attribute Table - serialisation")
     REQUIRE(layerManager.getLayerIndex("extra layer") == 1);
 
     dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef> newTable;
-    size_t colIndex1 = newTable.getOrInsertColumn("foo");
+    size_t colIndex1 = newTable.getOrInsertColumn("foo", "foo formula");
     size_t colIndex2 = newTable.getOrInsertColumn("bar");
 
     DisplayParams overAllDp;
@@ -438,8 +438,20 @@ TEST_CASE("Attribute Table - serialisation")
     REQUIRE(oldTable.isVisible(1));
     REQUIRE_FALSE(oldTable.isVisible(0));
 
-    REQUIRE(oldTable.getDisplayParams(oldTable.getColumnIndex("foo")).blue == Approx(fooDp.blue));
-    REQUIRE(oldTable.getDisplayParams(-1).blue == Approx(overAllDp.blue));
+    auto fooOldColIndex = oldTable.getColumnIndex("foo");
+    REQUIRE(fooOldColIndex == 1);
+    REQUIRE(oldTable.getColumnFormula(fooOldColIndex) == "foo formula");
+
+    auto barOldColIndex = oldTable.getColumnIndex("bar");
+    REQUIRE(barOldColIndex == 0);
+
+
+    // the old attribute table is a bit rubbish, and what display params you see is stateful
+    // the index you pass in is ignored.
+    REQUIRE(oldTable.getDisplayParams(527).blue == Approx(overAllDp.blue));
+
+    oldTable.setDisplayColumn(fooOldColIndex);
+    REQUIRE(oldTable.getDisplayParams(527).blue == Approx(fooDp.blue));
 
 
     {
@@ -467,7 +479,8 @@ TEST_CASE("Attribute Table - serialisation")
     REQUIRE_FALSE(isObjectVisible(roundTripManager, roundtripRow));
 
     REQUIRE(roundTripTable.getColumn(colIndex1).getDisplayParams().blue == Approx(fooDp.blue));
-    REQUIRE(roundTripTable.getDisplayParams().blue == Approx(overAllDp.blue));
+    // the overall display params have gone AWOL in the old implementation :-/
+    REQUIRE(roundTripTable.getDisplayParams().blue == Approx(fooDp.blue));
 
 
 }

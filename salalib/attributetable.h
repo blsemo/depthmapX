@@ -585,7 +585,7 @@ namespace dXreimpl
             m_columns[i].write(stream, (int)i);
         }
 
-        int rowcount = m_rows.size();
+        int rowcount = (int)m_rows.size();
         stream.write((char *)&rowcount, sizeof(int));
         for ( auto &kvp : m_rows)
         {
