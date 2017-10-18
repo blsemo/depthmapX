@@ -18,22 +18,21 @@
 #include "attributetable.h"
 #include "attributetableindex.h"
 
-template<typename TKey>
 class AttributeTableView
 {
 public:
-    AttributeTableView(const dXreimpl::AttributeTable<TKey>& table );
+    AttributeTableView(const dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef>& table );
 
-    const dXreimpl::AttributeTable<TKey> &m_table;
+    const dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef> &m_table;
 
     // columnIndex < 0 -> not set
     virtual void setDisplayColumn(int columnIndex);
     int getDisplayColumn() const{ return m_displayColumn;}
 
-    float getNormalisedValue(const TKey& key, const dXreimpl::AttributeRow &row) const;
+    float getNormalisedValue(const dXreimpl::SerialisedPixelRef& key, const dXreimpl::AttributeRow &row) const;
     const DisplayParams& getDisplayParams() const;
 
-    typedef std::vector<dXreimpl::ConstAttributeIndexItem<TKey>> ConstIndex;
+    typedef std::vector<dXreimpl::ConstAttributeIndexItem<dXreimpl::SerialisedPixelRef>> ConstIndex;
     const ConstIndex& getConstIndex() const{return m_index;}
 
 private:
@@ -41,71 +40,17 @@ private:
     int m_displayColumn;
 };
 
-
-
-template<typename TKey>
-AttributeTableView<TKey>::AttributeTableView( const dXreimpl::AttributeTable<TKey>& table ) : m_table(table), m_displayColumn(-1)
-{}
-
-template<typename TKey> void AttributeTableView<TKey>::setDisplayColumn(int columnIndex){
-    if (columnIndex < 0)
-    {
-        m_displayColumn = -1;
-        m_index.clear();
-        return;
-    }
-    // recalculate the index even if it's the same column in case stuff has changed
-    m_index = dXreimpl::makeAttributeIndex<dXreimpl::ConstAttributeIndexItem<TKey>>(m_table, columnIndex);
-    m_displayColumn = columnIndex;
-}
-
-template<typename TKey>
-float AttributeTableView<TKey>::getNormalisedValue(const TKey& key, const dXreimpl::AttributeRow &row) const
-{
-    if ( m_displayColumn < 0)
-    {
-        auto& endIter = m_table.end();
-        --endIter;
-        return (float)key.value /(float) endIter->getKey().value;
-    }
-    return row.getNormalisedValue(m_displayColumn);
-}
-
-template<typename TKey>
-const DisplayParams &AttributeTableView<TKey>::getDisplayParams() const
-{
-    if (m_displayColumn < 0)
-    {
-        return m_table.getDisplayParams();
-    }
-    return m_table.getColumn(m_displayColumn).getDisplayParams();
-}
-
-
-
-template <typename TKey>
-class AttributeTableHandle : public AttributeTableView<TKey>
+class AttributeTableHandle : public AttributeTableView
 {
 public:
-    AttributeTableHandle(dXreimpl::AttributeTable<TKey> &table) : m_mutableTable(table), AttributeTableView<TKey>(table){}
-    typedef std::vector<dXreimpl::AttributeIndexItem<TKey>> Index;
+    AttributeTableHandle(dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef> &table) : m_mutableTable(table), AttributeTableView(table){}
+    typedef std::vector<dXreimpl::AttributeIndexItem<dXreimpl::SerialisedPixelRef>> Index;
     const Index& getIndex() const {return m_mutableIndex;}
     virtual void setDisplayColumn(int columnIndex);
 private:
-    dXreimpl::AttributeTable<TKey>& m_mutableTable;
+    dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef>& m_mutableTable;
     Index m_mutableIndex;
 
 };
 
-template<typename TKey> void AttributeTableHandle<TKey>::setDisplayColumn(int columnIndex){
-    if (columnIndex < 0)
-    {
-        m_mutableIndex.clear();
-    }
-    else
-    {
-        // recalculate the index even if it's the same column in case stuff has changed
-        m_mutableIndex = dXreimpl::makeAttributeIndex<dXreimpl::AttributeIndexItem<TKey>>(m_mutableTable, columnIndex);
-    }
-    AttributeTableView::setDisplayColumn(columnIndex);
-}
+

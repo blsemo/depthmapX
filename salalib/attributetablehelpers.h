@@ -36,8 +36,7 @@ namespace dXreimpl{
         layerManager.setLayerVisible(layerIndex);
     }
 
-    template<typename RowKeyType>
-    inline PafColor getDisplayColor( const RowKeyType& key, const AttributeRow& row, const AttributeTableView<RowKeyType>& tableView, bool checkSelectionStatus = false)
+    inline PafColor getDisplayColor( const SerialisedPixelRef& key, const AttributeRow& row, const AttributeTableView& tableView, bool checkSelectionStatus = false)
     {
         if ( checkSelectionStatus && row.isSelected())
         {

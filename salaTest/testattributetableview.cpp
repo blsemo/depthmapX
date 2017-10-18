@@ -25,7 +25,7 @@ TEST_CASE("Test Attribute view"){
     table.addRow(0).setValue(0,1.0f).setValue(1, 1.1f);
     table.addRow(7).setValue(0,0.7f).setValue(1,1.7f);
 
-    AttributeTableView<SerialisedPixelRef> view(table);
+    AttributeTableView view(table);
     view.setDisplayColumn(0);
 
     REQUIRE(view.getConstIndex().front().key.value == 7);
@@ -54,7 +54,7 @@ TEST_CASE("Test attribute table handle")
     table.addRow(0).setValue(0,1.0f).setValue(1, 1.1f);
     table.addRow(7).setValue(0,0.7f).setValue(1,1.7f);
 
-    AttributeTableHandle<SerialisedPixelRef> handle(table);
+    AttributeTableHandle handle(table);
     handle.setDisplayColumn(0);
 
     REQUIRE(handle.getIndex().front().key.value == 7);
