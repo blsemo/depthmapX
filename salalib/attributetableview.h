@@ -16,6 +16,9 @@ public:
     virtual void setDisplayColumn(int columnIndex);
     int getDisplayColumn() const{ return m_displayColumn;}
 
+    float getNormalisedValue(const TKey& key, const dXreimpl::AttributeRow &row) const;
+    const DisplayParams& getDisplayParams() const;
+
     typedef std::vector<dXreimpl::ConstAttributeIndexItem<TKey>> ConstIndex;
     const ConstIndex& getConstIndex() const{return m_index;}
 
@@ -41,6 +44,30 @@ template<typename TKey> void AttributeTableView<TKey>::setDisplayColumn(int colu
     m_index = dXreimpl::makeAttributeIndex<dXreimpl::ConstAttributeIndexItem<TKey>>(m_table, columnIndex);
     m_displayColumn = columnIndex;
 }
+
+template<typename TKey>
+float AttributeTableView<TKey>::getNormalisedValue(const TKey& key, const dXreimpl::AttributeRow &row) const
+{
+    if ( m_displayColumn < 0)
+    {
+        auto& endIter = m_table.end();
+        --endIter;
+        return (float)key.value /(float) endIter->getKey().value;
+    }
+    return row.getNormalisedValue(m_displayColumn);
+}
+
+template<typename TKey>
+const DisplayParams &AttributeTableView<TKey>::getDisplayParams() const
+{
+    if (m_displayColumn < 0)
+    {
+        return m_table.getDisplayParams();
+    }
+    return m_table.getColumn(m_displayColumn).getDisplayParams();
+}
+
+
 
 template <typename TKey>
 class AttributeTableHandle : public AttributeTableView<TKey>

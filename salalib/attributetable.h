@@ -36,6 +36,7 @@ namespace dXreimpl
     public:
         virtual float getValue(const std::string &column) const = 0;
         virtual float getValue(size_t index) const = 0;
+        virtual float getNormalisedValue(size_t index) const = 0;
         virtual AttributeRow& setValue(const std::string &column, float value ) = 0;
         virtual AttributeRow& setValue(size_t index, float value) = 0;
         virtual AttributeRow& setSelection(bool selected) = 0;
@@ -165,6 +166,7 @@ namespace dXreimpl
     public:
         virtual float getValue(const std::string &column) const;
         virtual float getValue(size_t index) const;
+        virtual float getNormalisedValue(size_t index) const;
         virtual AttributeRow& setValue(const std::string &column, float value);
         virtual AttributeRow& setValue(size_t index, float value);
         virtual AttributeRow& setSelection(bool selected);

@@ -157,6 +157,17 @@ float dXreimpl::AttributeRowImpl::getValue(size_t index) const
     return m_data[index];
 }
 
+float dXreimpl::AttributeRowImpl::getNormalisedValue(size_t index) const
+{
+    checkIndex(index);
+    auto& colStats = m_colManager.getColumn(index).getStats();
+    if (colStats.max == colStats.min)
+    {
+        return 0.5f;
+    }
+    return  m_data[index] < 0 ? -1.0f : float((m_data[index] - colStats.min)/(colStats.max - colStats.min));
+}
+
 dXreimpl::AttributeRow& dXreimpl::AttributeRowImpl::setValue(const std::string &column, float value)
 {
     return setValue(m_colManager.getColumnIndex(column), value);

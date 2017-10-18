@@ -15,6 +15,8 @@
 
 #pragma once
 #include "attributetable.h"
+#include "attributetableview.h"
+#include "vertex.h"
 
 namespace dXreimpl{
     template<typename RowKeyType>
@@ -32,6 +34,19 @@ namespace dXreimpl{
         }
 
         layerManager.setLayerVisible(layerIndex);
+    }
+
+    template<typename RowKeyType>
+    inline PafColor getDisplayColor( const RowKeyType& key, const AttributeRow& row, const AttributeTableView<RowKeyType>& tableView, bool checkSelectionStatus = false)
+    {
+        if ( checkSelectionStatus && row.isSelected())
+        {
+            return PafColor(SALA_SELECTED_COLOR);
+        }
+
+        PafColor color;
+        return color.makeColor(tableView.getNormalisedValue(key, row), tableView.getDisplayParams());
+
     }
 
 }

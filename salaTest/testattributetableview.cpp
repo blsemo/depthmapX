@@ -14,6 +14,18 @@ TEST_CASE("Test Attribute view"){
     view.setDisplayColumn(0);
 
     REQUIRE(view.getConstIndex().front().key.value == 7);
+
+    REQUIRE(view.getNormalisedValue(view.getConstIndex().front().key, *view.getConstIndex().front().row) == Approx(0.0f));
+
+    REQUIRE(&view.getDisplayParams() != &table.getDisplayParams());
+    REQUIRE(&view.getDisplayParams() == &table.getColumn(0).getDisplayParams());
+
+
+    table.addRow(3);
+    view.setDisplayColumn(-1);
+    REQUIRE(view.getNormalisedValue(3, table.getRow(3)) == Approx(3.0/7));
+
+    REQUIRE(&table.getDisplayParams() == &view.getDisplayParams());
 }
 
 
