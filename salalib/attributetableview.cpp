@@ -34,7 +34,7 @@ float AttributeTableView::getNormalisedValue(const dXreimpl::SerialisedPixelRef 
 {
     if ( m_displayColumn < 0)
     {
-        auto& endIter = m_table.end();
+        auto endIter = m_table.end();
         --endIter;
         return (float)key.value /(float) endIter->getKey().value;
     }
