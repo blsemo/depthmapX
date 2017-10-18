@@ -41,8 +41,7 @@ SOURCES += \
     linkutils.cpp \
     gridproperties.cpp \
     attributetable.cpp \
-    layermanagerimpl.cpp \
-    attributetableview.cpp
+    layermanagerimpl.cpp
 
 HEADERS += \
     attributes.h \
