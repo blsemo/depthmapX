@@ -34,4 +34,45 @@ namespace dXreimpl{
         layerManager.setLayerVisible(layerIndex);
     }
 
+    class PrecisionGuard
+    {
+    public:
+        PrecisionGuard( std::ostream& stream, int prec)  : m_stream(stream), m_oldPrec(stream.precision(prec))
+        {
+        }
+        ~PrecisionGuard(){
+            m_stream.precision(m_oldPrec);
+        }
+    private:
+        std::ostream &m_stream;
+        int m_oldPrec;
+    };
+
+
+    template<typename TKey>
+    inline void outputHeader( std::ostream& stream, const AttributeTable<TKey>& table, char delim)
+    {
+        for (size_t i = 0; i < table.getNumColumns(); ++i)
+        {
+            stream << delim << table.getColumnName(i);
+        }
+        stream << std::endl;
+    }
+
+    inline void outputRow( std::ostream& stream, const AttributeRow& row, char delim, size_t numCol)
+    {
+        PrecisionGuard pg(stream, 8);
+        for (size_t i = 0; i < numCol; ++i)
+        {
+            stream << delim << row.getValue(i);
+        }
+        stream << std::endl;
+    }
+
+    inline float makeNormalisedValue(const AttributeColumn& col, float value)
+    {
+
+    }
+
+
 }

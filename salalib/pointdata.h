@@ -20,6 +20,8 @@
 
 #include "vertex.h"
 #include <vector>
+#include "attributetable.h"
+#include "layermanagerimpl.h"
 
 class MetaGraph;
 class PointMap;
@@ -215,7 +217,8 @@ protected:
    int m_undocounter;
    pqvector<PixelRefPair> m_merge_lines;
    // The attributes table replaces AttrHeader / AttrRow data format
-   AttributeTable m_attributes;
+   dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef> m_attributes;
+   LayerManagerImpl m_layerManager;
 public:
    PointMap(const std::string& name = std::string("VGA Map"));
    PointMap(const PointMap& pointdata);
@@ -356,13 +359,13 @@ protected:
    mutable int m_displayed_attribute;
 public:
    int addAttribute(const std::string& name)
-      { return m_attributes.insertColumn(name); }
+      { return m_attributes.insertOrResetColumn(name); }
    void removeAttribute(int col)
       { m_attributes.removeColumn(col); }
    void setAttribute(PixelRef pix, const std::string& name, float val)
-      { m_attributes.setValue(m_attributes.getRowid(pix),name,val); }
-   void incrementAttribute(PixelRef pix, const std::string& name)
-      { m_attributes.incrValue(m_attributes.getRowid(pix),name); }
+      { m_attributes.getRow(pix.toInt()).setValue(name,val); }
+//   void incrementAttribute(PixelRef pix, const std::string& name)
+//      { m_attributes.incrValue(m_attributes.getRowid(pix),name); }
    // I don't want to do this, but every so often you will need to update this table 
    // use const version by preference
    AttributeTable& getAttributeTable()
@@ -371,46 +374,48 @@ public:
       { return m_attributes; }
 public:
    double getDisplayMinValue() const
-   { return (m_displayed_attribute != -1) ? m_attributes.getMinValue(m_displayed_attribute) : 0; } 
+   { return (m_displayed_attribute != -1) ? m_attributes.getColumn(m_displayed_attribute).getStats().min : 0; }
 
    // Quick mod - TV
 #if defined(_WIN32)
    double getDisplayMaxValue() const
-   { return (m_displayed_attribute != -1) ? m_attributes.getMaxValue(m_displayed_attribute) : pixelate(m_region.top_right); } 
+   { return (m_displayed_attribute != -1) ? m_attributes.getColumn(m_displayed_attribute).getStats().max : pixelate(m_region.top_right); }
 #else
    double getDisplayMaxValue() const
-   { return (m_displayed_attribute != -1) ? m_attributes.getMaxValue(m_displayed_attribute) : pixelate(m_region.top_right).x; }
+   { return (m_displayed_attribute != -1) ? m_attributes.getColumn(m_displayed_attribute).getStats().max : pixelate(m_region.top_right).x; }
 #endif
    //
    mutable DisplayParams m_display_params;
    const DisplayParams& getDisplayParams() const
-   { return m_attributes.getDisplayParams(m_displayed_attribute); } 
+   { return m_displayed_attribute < 0 ? m_attributes.getDisplayParams() : m_attributes.getColumn(m_displayed_attribute).getDisplayParams(); }
    // make a local copy of the display params for access speed:
    void setDisplayParams(const DisplayParams& dp, bool apply_to_all = false)
    { if (apply_to_all)
         m_attributes.setDisplayParams(dp); 
      else 
-        m_attributes.setDisplayParams(m_displayed_attribute, dp); 
+        m_attributes.getColumn(m_displayed_attribute).setDisplayParams(dp);
      m_display_params = dp; }
    //
-public:
-   void setDisplayedAttribute( int col );
-   // use set displayed attribute instead unless you are deliberately changing the column order:
-   void overrideDisplayedAttribute(int attribute)
-   { m_displayed_attribute = attribute; }
-   // now, there is a slightly odd thing here: the displayed attribute can go out of step with the underlying 
-   // attribute data if there is a delete of an attribute in idepthmap.h, so it just needs checking before returning!
-   int getDisplayedAttribute() const
-   { if (m_displayed_attribute == m_attributes.m_display_column) return m_displayed_attribute;
-     if (m_attributes.m_display_column != -2) {
-        m_displayed_attribute = m_attributes.m_display_column;
-        m_display_params = m_attributes.getDisplayParams(m_displayed_attribute);
-     }
-     return m_displayed_attribute; }
-   //
-   double getDisplayedAverage()
-      { return m_attributes.getAvgValue( m_displayed_attribute ); }
-   //
+
+   // TODO remove and replace with Attribute View Wrapper
+   //public:
+//   void setDisplayedAttribute( int col );
+//   // use set displayed attribute instead unless you are deliberately changing the column order:
+//   void overrideDisplayedAttribute(int attribute)
+//   { m_displayed_attribute = attribute; }
+//   // now, there is a slightly odd thing here: the displayed attribute can go out of step with the underlying
+//   // attribute data if there is a delete of an attribute in idepthmap.h, so it just needs checking before returning!
+//   int getDisplayedAttribute() const
+//   { if (m_displayed_attribute == m_attributes.m_display_column) return m_displayed_attribute;
+//     if (m_attributes.m_display_column != -2) {
+//        m_displayed_attribute = m_attributes.m_display_column;
+//        m_display_params = m_attributes.getDisplayParams(m_displayed_attribute);
+//     }
+//     return m_displayed_attribute; }
+//   //
+//   double getDisplayedAverage()
+//      { return m_attributes.getAvgValue( m_displayed_attribute ); }
+//   //
    double getLocationValue(const Point2f& point);
    //
    // Screen functionality

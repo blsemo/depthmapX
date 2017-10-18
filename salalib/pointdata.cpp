@@ -32,6 +32,7 @@
 // Metagraphs are used...
 #include <salalib/mgraph.h>
 #include <salalib/ngraph.h>
+#include "attributetablehelpers.h"
 
 #include "genlib/stringutils.h"
 /////////////////////////////////////////////////////////////////////////////////
@@ -1007,16 +1008,17 @@ void PointMap::outputSummary(ostream& myout, char delimiter)
 {
    myout << "Ref" << delimiter << "x" << delimiter << "y";
 
-   m_attributes.outputHeader(myout, delimiter);
-   myout.precision(12);
+   dXreimpl::outputHeader(myout, m_attributes, delimiter);
+   dXreimpl::PrecisionGuard pg(myout, 12);
+   size_t numColumns = m_attributes.getNumColumns();
 
-   for (int i = 0; i < m_attributes.getRowCount(); i++) {
-      if (m_attributes.isVisible(i)) {
-         PixelRef pix = m_attributes.getRowKey(i);
+   for (auto &row : m_attributes) {
+      if (isObjectVisible(m_layerManager, row.getRow()))
+      {  PixelRef pix = row.getKey().value;
          myout << pix << delimiter;
          Point2f p = depixelate(pix);
          myout << p.x << delimiter << p.y;
-         m_attributes.outputRow(i, myout, delimiter); // , update_only = false
+         dXreimpl::outputRow(myout, row.getRow(), delimiter, numColumns); // , update_only = false
       }
    }
 }
@@ -1147,23 +1149,6 @@ void PointMap::outputBinSummaries(ostream& myout)
 
 /////////////////////////////////////////////////////////////////////////////////
 
-// Attribute Stuff 
-
-void PointMap::setDisplayedAttribute(int col)
-{
-   if (m_displayed_attribute == col) {
-      return;
-   }
-   else {
-      m_displayed_attribute = col;
-   }
-   // make a local copy of the display params for access speed:
-   m_display_params = m_attributes.getDisplayParams(m_displayed_attribute);
-
-   m_attributes.setDisplayColumn(m_displayed_attribute,true);
-}
-
-/////////////////////////////////////////////////////////////////////////////////
 
 // Screen stuff 
 

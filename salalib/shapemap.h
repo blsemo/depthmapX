@@ -423,9 +423,7 @@ public:
    void invalidateDisplayedAttribute()
       { m_invalidate = true; }
    //
-   double getDisplayedAverage()
-      { return m_attributes.getAvgValue( m_displayed_attribute ); }
-   //
+
 protected:
    bool m_show;              // used when shape map is a drawing layer
    bool m_editable;

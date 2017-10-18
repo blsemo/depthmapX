@@ -301,8 +301,8 @@ bool MapInfoData::exportFile(ostream& miffile, ostream& midfile, const PointMap&
 
    miffile.precision(16);
 
-   for (int i = 0; i < points.m_attributes.getRowCount(); i++) {
-      PixelRef pix = points.m_attributes.getRowKey(i);
+   for (auto &row : points.m_attributes) {
+      PixelRef pix = row.getKey().value;
       Point2f p = points.depixelate(pix);
       miffile << "Point " << p.x << " " << p.y << endl;
       miffile << "    Symbol (32,0,10)" << endl;
@@ -512,9 +512,9 @@ void MapInfoData::writeheader(ostream& miffile)
 // note: stopped using m_table and m_columnheads as of VERSION_MAPINFO_SHAPES
 // simply hack up the table now for own purposes
 
-void MapInfoData::writetable(ostream& miffile, ostream& midfile, const AttributeTable& attributes)
+void MapInfoData::writetable(ostream& miffile, ostream& midfile, const dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef>& attributes)
 {
-   miffile << "Columns " << attributes.getColumnCount() + 1 << endl;
+   miffile << "Columns " << attributes.getNumColumns() + 1 << endl;
    /*
    miffile << "Columns " << m_columnheads.size() + 1 + attributes.getColumnCount() << endl;
 
@@ -524,7 +524,7 @@ void MapInfoData::writetable(ostream& miffile, ostream& midfile, const Attribute
    */
    miffile << "  Depthmap_Ref Integer" << endl;
 
-   for (int j = 0; j < attributes.getColumnCount(); j++) {
+   for (int j = 0; j < attributes.getNumColumns(); j++) {
       std::string colname = attributes.getColumnName(j);
       miffile << "  ";
       bool lastalpha = false;
@@ -544,14 +544,9 @@ void MapInfoData::writetable(ostream& miffile, ostream& midfile, const Attribute
 
    miffile << "Data" << endl << endl;
 
-   for (int k = 0; k < attributes.getRowCount(); k++) {
-      /*
-      if (k < m_table.size()) {
-         midfile << m_table[k] << m_delimiter;
-      }
-      */
-      if (attributes.isVisible(k)) {
-         midfile << attributes.getRowKey(k);
+   for (auto& row : attributes) {
+      if (row.getRow().visible) {
+         midfile << row.getKey().value;
          // note: outputRow prefixes delimiter, so no delimiter necessary first
          attributes.outputRow( k, midfile, m_delimiter );
       }

@@ -928,24 +928,24 @@ double IVGAMap::getGridSpacing()
 
 }
 
-const char *IVGAMap::getDisplayedAttributeColumn()
-{
-   PointMap& pd = *(PointMap *)m_data;
-   return pd.getAttributeTable().getColumnName(pd.getDisplayedAttribute()).c_str();
-}
+//const char *IVGAMap::getDisplayedAttributeColumn()
+//{
+//   PointMap& pd = *(PointMap *)m_data;
+//   return pd.getAttributeTable().getColumnName(pd.getDisplayedAttribute()).c_str();
+//}
 
-void IVGAMap::setDisplayedAttributeColumn(const char *attribute)
-{
-   if (strcmp(attribute,"Ref Number") == 0) {
-      ((PointMap *)m_data)->setDisplayedAttribute(-1);
-   }
-   else {
-      int col = ((PointMap *)m_data)->getAttributeTable().getColumnIndex(attribute);
-      if (col != -1) {
-         ((PointMap *)m_data)->setDisplayedAttribute(col);
-      }
-   }
-}
+//void IVGAMap::setDisplayedAttributeColumn(const char *attribute)
+//{
+//   if (strcmp(attribute,"Ref Number") == 0) {
+//      ((PointMap *)m_data)->setDisplayedAttribute(-1);
+//   }
+//   else {
+//      int col = ((PointMap *)m_data)->getAttributeTable().getColumnIndex(attribute);
+//      if (col != -1) {
+//         ((PointMap *)m_data)->setDisplayedAttribute(col);
+//      }
+//   }
+//}
 
 void IVGAMap::analysePointDepth(IComm *comm, int method)
 {

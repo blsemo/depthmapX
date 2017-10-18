@@ -154,9 +154,9 @@ void AgentEngine::run(Communicator *comm, PointMap *pointmap)
        outputTrails(trails);
    }
 
-   // actually, no, do this from the 
-   pointmap->overrideDisplayedAttribute(-2);
-   pointmap->setDisplayedAttribute(displaycol);
+//   // actually, no, do this from the
+//   pointmap->overrideDisplayedAttribute(-2);
+//   pointmap->setDisplayedAttribute(displaycol);
 }
 
 void AgentEngine::outputTrails(ostream& trailsFile) {
