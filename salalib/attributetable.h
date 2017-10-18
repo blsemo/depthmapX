@@ -241,6 +241,7 @@ namespace dXreimpl
         void deselectAllRows();
         const DisplayParams& getDisplayParams() const { return m_displayParams; }
         void setDisplayParams(const DisplayParams& params){m_displayParams = params;}
+        void setDisplayParamsForAllAttributes(const DisplayParams& params);
         void read(std::istream &stream, LayerManager &layerManager, int version);
         void write(std::ostream &stream, const LayerManager &layerManager);
 
@@ -538,6 +539,16 @@ namespace dXreimpl
         {
             row.second->setSelection(false);
         }
+    }
+
+    template<typename RowKeyType>
+    void AttributeTable<RowKeyType>::setDisplayParamsForAllAttributes(const DisplayParams &params)
+    {
+        for (auto& col: m_columns)
+        {
+            col.setDisplayParams(params);
+        }
+
     }
 
     template<typename RowKeyType>
