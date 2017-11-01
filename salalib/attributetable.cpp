@@ -157,12 +157,23 @@ float dXreimpl::AttributeRowImpl::getValue(size_t index) const
     return m_data[index];
 }
 
-void dXreimpl::AttributeRowImpl::setValue(const std::string &column, float value)
+float dXreimpl::AttributeRowImpl::getNormalisedValue(size_t index) const
 {
-    setValue(m_colManager.getColumnIndex(column), value);
+    checkIndex(index);
+    auto& colStats = m_colManager.getColumn(index).getStats();
+    if (colStats.max == colStats.min)
+    {
+        return 0.5f;
+    }
+    return  m_data[index] < 0 ? -1.0f : float((m_data[index] - colStats.min)/(colStats.max - colStats.min));
 }
 
-void dXreimpl::AttributeRowImpl::setValue(size_t index, float value)
+dXreimpl::AttributeRow& dXreimpl::AttributeRowImpl::setValue(const std::string &column, float value)
+{
+    return setValue(m_colManager.getColumnIndex(column), value);
+}
+
+dXreimpl::AttributeRow& dXreimpl::AttributeRowImpl::setValue(size_t index, float value)
 {
     checkIndex(index);
     float oldVal = m_data[index];
@@ -172,11 +183,13 @@ void dXreimpl::AttributeRowImpl::setValue(size_t index, float value)
         oldVal = 0.0f;
     }
     m_colManager.getColumn(index).updateStats(value, oldVal);
+    return *this;
 }
 
-void dXreimpl::AttributeRowImpl::setSelection(bool selected)
+dXreimpl::AttributeRow& dXreimpl::AttributeRowImpl::setSelection(bool selected)
 {
     m_selected = selected;
+    return *this;
 }
 
 bool dXreimpl::AttributeRowImpl::isSelected() const

@@ -41,7 +41,8 @@ SOURCES += \
     linkutils.cpp \
     gridproperties.cpp \
     attributetable.cpp \
-    layermanagerimpl.cpp
+    layermanagerimpl.cpp \
+    attributetableview.cpp
 
 HEADERS += \
     attributes.h \
@@ -74,7 +75,8 @@ HEADERS += \
     attributetableindex.h \
     layermanager.h \
     layermanagerimpl.h \
-    attributetablehelpers.h
+    attributetablehelpers.h \
+    attributetableview.h
 
 DISTFILES += \
     salascript-tests.txt

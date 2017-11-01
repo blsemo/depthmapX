@@ -15,6 +15,8 @@
 
 #pragma once
 #include "attributetable.h"
+#include "attributetableview.h"
+#include "vertex.h"
 
 namespace dXreimpl{
     template<typename RowKeyType>
@@ -69,10 +71,16 @@ namespace dXreimpl{
         stream << std::endl;
     }
 
-    inline float makeNormalisedValue(const AttributeColumn& col, float value)
+    inline PafColor getDisplayColor( const SerialisedPixelRef& key, const AttributeRow& row, const AttributeTableView& tableView, bool checkSelectionStatus = false)
     {
+        if ( checkSelectionStatus && row.isSelected())
+        {
+            return PafColor(SALA_SELECTED_COLOR);
+        }
+
+        PafColor color;
+        return color.makeColor(tableView.getNormalisedValue(key, row), tableView.getDisplayParams());
 
     }
-
 
 }

@@ -36,9 +36,10 @@ namespace dXreimpl
     public:
         virtual float getValue(const std::string &column) const = 0;
         virtual float getValue(size_t index) const = 0;
-        virtual void setValue(const std::string &column, float value ) = 0;
-        virtual void setValue(size_t index, float value) = 0;
-        virtual void setSelection(bool selected) = 0;
+        virtual float getNormalisedValue(size_t index) const = 0;
+        virtual AttributeRow& setValue(const std::string &column, float value ) = 0;
+        virtual AttributeRow& setValue(size_t index, float value) = 0;
+        virtual AttributeRow& setSelection(bool selected) = 0;
         virtual bool isSelected() const = 0;
 
         virtual ~AttributeRow(){}
@@ -165,9 +166,10 @@ namespace dXreimpl
     public:
         virtual float getValue(const std::string &column) const;
         virtual float getValue(size_t index) const;
-        virtual void setValue(const std::string &column, float value);
-        virtual void setValue(size_t index, float value);
-        virtual void setSelection(bool selected);
+        virtual float getNormalisedValue(size_t index) const;
+        virtual AttributeRow& setValue(const std::string &column, float value);
+        virtual AttributeRow& setValue(size_t index, float value);
+        virtual AttributeRow& setSelection(bool selected);
         virtual bool isSelected() const;
 
         void addColumn();
@@ -239,6 +241,7 @@ namespace dXreimpl
         void deselectAllRows();
         const DisplayParams& getDisplayParams() const { return m_displayParams; }
         void setDisplayParams(const DisplayParams& params){m_displayParams = params;}
+        void setDisplayParamsForAllAttributes(const DisplayParams& params);
         void read(std::istream &stream, LayerManager &layerManager, int version);
         void write(std::ostream &stream, const LayerManager &layerManager);
 
@@ -536,6 +539,16 @@ namespace dXreimpl
         {
             row.second->setSelection(false);
         }
+    }
+
+    template<typename RowKeyType>
+    void AttributeTable<RowKeyType>::setDisplayParamsForAllAttributes(const DisplayParams &params)
+    {
+        for (auto& col: m_columns)
+        {
+            col.setDisplayParams(params);
+        }
+
     }
 
     template<typename RowKeyType>

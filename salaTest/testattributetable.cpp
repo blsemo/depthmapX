@@ -272,6 +272,31 @@ TEST_CASE("test attribute table")
         std::ofstream outfile(scf.Filename());
         table.write(outfile, layerManager);
     }
+}
+
+TEST_CASE("normalised values"){
+    using namespace dXreimpl;
+    AttributeTable<SerialisedPixelRef> table;
+    table.getOrInsertColumn("col1");
+    table.getOrInsertColumn("col2");
+    table.addRow(0).setValue(0, 1.0f);
+    table.addRow(1).setValue(0, 0.5f);
+    table.addRow(2).setValue(0, 2.0f);
+
+    REQUIRE(table.getRow(0).getNormalisedValue(1) == Approx(0.5f));
+    REQUIRE(table.getRow(0).getNormalisedValue(0) == Approx(0.33333f));
+    REQUIRE(table.getRow(1).getNormalisedValue(0) == Approx(0.0f));
+    REQUIRE(table.getRow(2).getNormalisedValue(0) == Approx(1.0f));
+
+    table.addRow(3).setValue(1,1.0f);
+
+    REQUIRE(table.getRow(1).getNormalisedValue(1) == Approx(0.5f));
+    REQUIRE(table.getRow(3).getNormalisedValue(1) == Approx(0.5f));
+
+    table.getRow(0).setValue(1,1.1f);
+    REQUIRE(table.getRow(3).getNormalisedValue(1) == Approx(0.0f));
+    REQUIRE(table.getRow(1).getNormalisedValue(1) == Approx(-1.0f));
+
 
 }
 
