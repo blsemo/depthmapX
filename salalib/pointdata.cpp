@@ -3128,7 +3128,7 @@ bool PointMap::analyseAngularPointDepth(Communicator *comm)
             Point& p2 = getPoint(p.m_merge);
             if (p2.m_misc != ~0) {
                p2.m_cumangle = p.m_cumangle;
-               m_attributes.getRowid(p.m_merge).setValue(path_angle_col, float(p2.m_cumangle) );
+               m_attributes.getRow(p.m_merge).setValue(path_angle_col, float(p2.m_cumangle) );
                p2.m_node->extractAngular(search_list,this,AngularTriple(here.angle,p.m_merge,NoPixel));
                p2.m_misc = ~0;
             }
