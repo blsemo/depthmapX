@@ -21,7 +21,9 @@
 #include "vertex.h"
 #include <vector>
 #include "attributetable.h"
+#include "attributetableview.h"
 #include "layermanagerimpl.h"
+#include "attributetablehelpers.h"
 
 class MetaGraph;
 class PointMap;
@@ -134,21 +136,7 @@ public:
    { 
       m_state |= Point::EDGE;
    }
-   // old blocking code
-   //void addBlock( int block )
-   //   { m_block |= block; }
-   //void setBlock( int block )
-   //   { m_block = block; }
-   //int getBlock() const
-   //   { return m_block & 0x0000FFFF; }
-   //void addPartBlock( int block )
-   //   { m_block |= (block << 16); }
-   //int getPartBlock() const
-   //   { return (m_block & 0xFFFF0000) >> 16; }
-   //int getAllBlock() const
-   //   { return m_block | (m_block >> 16); }
-   //int fillBlocked() const
-   //   { return m_block & 0x06600660; }
+
    int getState()
       { return m_state; }
    int getMisc()  // used as: undocounter, in graph construction, and an agent reference, as well as for making axial maps
@@ -218,6 +206,7 @@ protected:
    pqvector<PixelRefPair> m_merge_lines;
    // The attributes table replaces AttrHeader / AttrRow data format
    dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef> m_attributes;
+   AttributeTableHandle m_attributeView;
    LayerManagerImpl m_layerManager;
 public:
    PointMap(const std::string& name = std::string("VGA Map"));
@@ -397,25 +386,24 @@ public:
      m_display_params = dp; }
    //
 
-   // TODO remove and replace with Attribute View Wrapper
-   //public:
-//   void setDisplayedAttribute( int col );
-//   // use set displayed attribute instead unless you are deliberately changing the column order:
-//   void overrideDisplayedAttribute(int attribute)
-//   { m_displayed_attribute = attribute; }
-//   // now, there is a slightly odd thing here: the displayed attribute can go out of step with the underlying
-//   // attribute data if there is a delete of an attribute in idepthmap.h, so it just needs checking before returning!
-//   int getDisplayedAttribute() const
-//   { if (m_displayed_attribute == m_attributes.m_display_column) return m_displayed_attribute;
-//     if (m_attributes.m_display_column != -2) {
-//        m_displayed_attribute = m_attributes.m_display_column;
-//        m_display_params = m_attributes.getDisplayParams(m_displayed_attribute);
-//     }
-//     return m_displayed_attribute; }
-//   //
-//   double getDisplayedAverage()
-//      { return m_attributes.getAvgValue( m_displayed_attribute ); }
-//   //
+   public:
+   void setDisplayedAttribute( int col );
+   // use set displayed attribute instead unless you are deliberately changing the column order:
+   void overrideDisplayedAttribute(int attribute)
+   { m_displayed_attribute = attribute; }
+   // now, there is a slightly odd thing here: the displayed attribute can go out of step with the underlying
+   // attribute data if there is a delete of an attribute in idepthmap.h, so it just needs checking before returning!
+   int getDisplayedAttribute() const
+   { if (m_displayed_attribute == m_attributeView.getDisplayColumn()) return m_displayed_attribute;
+     if (m_attributeView.getDisplayColumn() != -2) {
+        m_displayed_attribute = m_attributeView.getDisplayColumn();
+        m_display_params = m_attributeView.getDisplayParams();
+     }
+     return m_displayed_attribute; }
+   //
+   double getDisplayedAverage()
+      { return dXreimpl::getColumnAverage(m_attributes, m_displayed_attribute);}
+   //
    double getLocationValue(const Point2f& point);
    //
    // Screen functionality

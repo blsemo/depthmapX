@@ -512,7 +512,7 @@ void MapInfoData::writeheader(ostream& miffile)
 // note: stopped using m_table and m_columnheads as of VERSION_MAPINFO_SHAPES
 // simply hack up the table now for own purposes
 
-void MapInfoData::writetable(ostream& miffile, ostream& midfile, const dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef>& attributes)
+void MapInfoData::writetable(ostream& miffile, ostream& midfile, const dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef>& attributes, const LayerManager &layerManager)
 {
    miffile << "Columns " << attributes.getNumColumns() + 1 << endl;
    /*
@@ -545,10 +545,10 @@ void MapInfoData::writetable(ostream& miffile, ostream& midfile, const dXreimpl:
    miffile << "Data" << endl << endl;
 
    for (auto& row : attributes) {
-      if (row.getRow().visible) {
+      if (isObjectVisible(layerManager, row.getRow())) {
          midfile << row.getKey().value;
          // note: outputRow prefixes delimiter, so no delimiter necessary first
-         attributes.outputRow( k, midfile, m_delimiter );
+         dXreimpl::outputRow(midfile, row.getRow(), m_delimiter, attributes.getNumColumns());
       }
    }
 }

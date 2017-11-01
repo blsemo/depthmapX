@@ -248,7 +248,23 @@ void Isovist::addBlock(const Line& li, int tag, double startangle, double endang
    }
 }
 
-void Isovist::setData(AttributeTable& table, int row, bool simple_version)
+void addIsovistColumns(dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef> &table, bool simple_version)
+{
+    table.getOrInsertColumn("Isovist Area");
+    if (!simple_version)
+    {
+        table.getOrInsertColumn("Isovist Compactness");
+        table.getOrInsertColumn("Isovist Drift Angle");
+        table.getOrInsertColumn("Isovist Drift Magnitude");
+        table.getOrInsertColumn("Isovist Min Radial");
+        table.getOrInsertColumn("Isovist Max Radial");
+        table.getOrInsertColumn("Isovist Occlusivity");
+        table.getOrInsertColumn("Isovist Perimeter");
+    }
+
+}
+
+void Isovist::setData(dXreimpl::AttributeRow& row, bool simple_version)
 {
    // the area / centre of gravity calculation is a duplicate of the SalaPolygon version,
    // included here for general information about the isovist
@@ -286,57 +302,19 @@ void Isovist::setData(AttributeTable& table, int row, bool simple_version)
    driftvec.normalise();
    double driftang = driftvec.angle();
    //
-   int col = table.getOrInsertColumnIndex("Isovist Area");
-   if (col == -1) {
-      col = table.insertColumn("Isovist Area");
-   }
-   table.setValue(row,col,(float)area);
-
-
+   row.setValue("Isovist Area",(float)area);
 
    // dX simple version test // TV
 //#define _COMPILE_dX_SIMPLE_VERSION
 #ifndef _COMPILE_dX_SIMPLE_VERSION
    if(!simple_version) {
-       col = table.getColumnIndex("Isovist Compactness");
-       if (col == -1) {
-           col = table.insertColumn("Isovist Compactness");
-       }
-       table.setValue(row,col, (float)(4.0 * M_PI * area / (m_perimeter*m_perimeter)));
-
-       col = table.getColumnIndex("Isovist Drift Angle");
-       if (col == -1) {
-           col = table.insertColumn("Isovist Drift Angle");
-       }
-       table.setValue(row,col,(float)(180.0*driftang/M_PI));
-
-       col = table.getColumnIndex("Isovist Drift Magnitude");
-       if (col == -1) {
-           col = table.insertColumn("Isovist Drift Magnitude");
-       }
-       table.setValue(row,col,(float)driftmag);
-       col = table.getColumnIndex("Isovist Min Radial");
-       if (col == -1) {
-           col = table.insertColumn("Isovist Min Radial");
-       }
-       table.setValue(row,col,(float)m_min_radial);
-       col = table.getColumnIndex("Isovist Max Radial");
-       if (col == -1) {
-           col = table.insertColumn("Isovist Max Radial");
-       }
-       table.setValue(row,col,(float)m_max_radial);
-
-       col = table.getColumnIndex("Isovist Occlusivity");
-       if (col == -1) {
-           col = table.insertColumn("Isovist Occlusivity");
-       }
-       table.setValue(row,col,(float)m_occluded_perimeter);
-
-       col = table.getColumnIndex("Isovist Perimeter");
-       if (col == -1) {
-           col = table.insertColumn("Isovist Perimeter");
-       }
-       table.setValue(row,col,(float)m_perimeter);
+       row.setValue("Isovist Compactness", (float)(4.0 * M_PI * area / (m_perimeter*m_perimeter)));
+       row.setValue("Isovist Drift Angle",(float)(180.0*driftang/M_PI));
+       row.setValue("Isovist Drift Magnitude",(float)driftmag);
+       row.setValue("Isovist Min Radial",(float)m_min_radial);
+       row.setValue("Isovist Max Radial",(float)m_max_radial);
+       row.setValue("Isovist Occlusivity",(float)m_occluded_perimeter);
+       row.setValue("Isovist Perimeter",(float)m_perimeter);
    }
 #endif
 

@@ -57,7 +57,7 @@ public:
    bool readheader(istream& miffile);
    bool readcolumnheaders(istream& miffile, istream& midfile, std::vector<std::string>& columnheads);
    void writeheader(ostream& miffile);
-   void writetable(ostream& miffile, ostream& midfile, const dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef>& attributes);
+   void writetable(ostream& miffile, ostream& midfile, const dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef>& attributes, const LayerManager &layerManager);
    //
    istream& read(istream& stream, int version);
    ostream& write(ostream& stream);

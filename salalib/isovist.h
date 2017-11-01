@@ -22,6 +22,7 @@
 #define __ISOVIST_H__
 
 // this is very much like sparksieve:
+#include "attributetable.h"
 
 struct IsoSeg
 {
@@ -78,9 +79,11 @@ public:
    void make(BSPNode *here);
    void drawnode(const Line& li, int tag);
    void addBlock(const Line& li, int tag, double startangle, double endangle);
-   void setData(AttributeTable& table, int row, bool simple_version);
+   void setData(dXreimpl::AttributeRow& row, bool simple_version);
    //
    int getClosestLine(BSPNode *root, const Point2f& p);
 };
+
+void addIsovistColumns(dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef> &table, bool simple_version);
 
 #endif

@@ -24,6 +24,7 @@
 #include <sstream>
 #include <iterator>
 #include <algorithm>
+#include "spacepix.h"
 
 
 namespace dXreimpl
@@ -197,6 +198,9 @@ namespace dXreimpl
     {
         SerialisedPixelRef(int val) : value(val)
         {}
+
+        SerialisedPixelRef(const PixelRef& pix) : value(pix)
+        {}
         int value;
 
         bool operator < (const SerialisedPixelRef& other ) const
@@ -244,6 +248,7 @@ namespace dXreimpl
         void setDisplayParamsForAllAttributes(const DisplayParams& params);
         void read(std::istream &stream, LayerManager &layerManager, int version);
         void write(std::ostream &stream, const LayerManager &layerManager);
+        void clear();
 
    // interface AttributeColumnManager
     public:
@@ -257,7 +262,6 @@ namespace dXreimpl
         StorageType m_rows;
         std::map<std::string, size_t> m_columnMapping;
         std::vector<AttributeColumnImpl> m_columns;
-        int64_t m_visibleLayers;
         DisplayParams m_displayParams;
 
     private:
@@ -662,6 +666,14 @@ namespace dXreimpl
             elem.second->addColumn();
         }
         return colIndex;
+    }
+
+    template<class RowKeyType>
+    void AttributeTable<RowKeyType>::clear()
+    {
+        m_rows.clear();
+        m_columns.clear();
+        m_columnMapping.clear();
     }
 }
 

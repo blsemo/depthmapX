@@ -71,6 +71,7 @@ namespace dXreimpl{
         stream << std::endl;
     }
 
+
     inline PafColor getDisplayColor( const SerialisedPixelRef& key, const AttributeRow& row, const AttributeTableView& tableView, bool checkSelectionStatus = false)
     {
         if ( checkSelectionStatus && row.isSelected())
@@ -80,7 +81,26 @@ namespace dXreimpl{
 
         PafColor color;
         return color.makeColor(tableView.getNormalisedValue(key, row), tableView.getDisplayParams());
+    }
 
+    inline PafColor getDisplayColor(const SerialisedPixelRef &key, const AttributeTableView &tableView, bool checkSelectionStatus = false)
+    {
+        auto& row = tableView.m_table.getRow(key);
+        return getDisplayColor(key, row, tableView, checkSelectionStatus);
+    }
+
+    template<typename KeyType>
+    inline double getColumnAverage(const AttributeTable<KeyType>& table, int column)
+    {
+        if ( column < 0)
+        {
+            return -1.0;
+        }
+        if (table.getNumRows() == 0)
+        {
+            return 0.0;
+        }
+        return table.getColumn(column).getStats().total / (double)table.getNumRows()
     }
 
 }

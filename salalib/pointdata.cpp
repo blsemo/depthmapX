@@ -185,7 +185,7 @@ bool PointMaps::write(ofstream& stream, int version, bool displayedmaponly)
 
 /////////////////////////////////////////////////////////////////////////////////
 
-PointMap::PointMap(const std::string& name)
+PointMap::PointMap(const std::string& name) : m_attributeView(m_attributes)
 {
    m_name = name;
 
@@ -263,8 +263,6 @@ PointMap& PointMap::operator = (const PointMap& pointdata)
    }
    return *this;
 }
-
-// Technically should not call a function from constructor!
 
 void PointMap::construct(const PointMap& pointdata)
 {
@@ -1283,7 +1281,7 @@ PafColor PointMap::getPointColor() const
    else {
       if (state & Point::FILLED) {
          if (m_processed) {
-            return m_attributes.getDisplayColorByKey( cur );
+            return dXreimpl::getDisplayColor(dXreimpl::SerialisedPixelRef(cur), m_attributeView);
          }
          else if (state & Point::EDGE) {
             return PafColor( 0x0077BB77 );
@@ -1318,7 +1316,7 @@ bool PointMap::clearSel()
    }
    m_selection_set.clear();
    m_selection = NO_SELECTION;
-   m_attributes.deselectAll();
+   m_attributes.deselectAllRows();
    return true;
 }
 
@@ -1359,7 +1357,7 @@ bool PointMap::setCurSel(QtRegion &r, bool add )
                m_selection |= SINGLE_SELECTION;
             }
             if (m_points[i][j].m_node) {
-               m_attributes.selectRowByKey(PixelRef(i,j));
+               m_attributes.getRow(dXreimpl::SerialisedPixelRef(PixelRef(i,j))).setSelection(true);
             }
          }
       }
@@ -1382,13 +1380,16 @@ bool PointMap::setCurSel(const pvecint& selset, bool add)
    for (size_t i = 0; i < selset.size(); i++) {
       PixelRef pix = selset[i];
       if (includes(pix)) {
-         int row = m_attributes.getRowid(pix);
-         if (row != -1) {
-            m_points[pix.x][pix.y].m_state |= Point::SELECTED;
-            if (m_attributes.selectRowByKey(pix)) {
-               m_selection_set.push_back(pix);
+        auto& row = m_attributes.getRow(pix);
+        m_points[pix.x][pix.y].m_state |= Point::SELECTED;
+        if ( isObjectVisible(m_layerManager, row))
+        {
+            if (!row.isSelected())
+            {
+                row.setSelection(true);
+                m_selection_set.push_back(pix);
             }
-         }
+        }
       }
    }
    return true;
@@ -1608,7 +1609,7 @@ bool PointMap::read(ifstream& stream, int version )
    if (version >= VERSION_ATTRIBUTES_TABLE) {
       // our data read
       stream.read((char *)&displayed_attribute,sizeof(displayed_attribute));
-      m_attributes.read( stream, version );
+      m_attributes.read( stream, m_layerManager, version);
    }
    else if (version >= VERSION_NGRAPH_INTROD) {
       // ick, a very specific subset have this file format:
@@ -1722,7 +1723,7 @@ bool PointMap::write( ofstream& stream, int version )
    stream.write( (char *) &m_bottom_left, sizeof(m_bottom_left) );
 
    stream.write( (char *) &m_displayed_attribute, sizeof(m_displayed_attribute) );
-   m_attributes.write( stream, version );
+   m_attributes.write( stream, m_layerManager);
    
    for (int j = 0; j < m_cols; j++) {
       for (int k = 0; k < m_rows; k++) {
@@ -1747,98 +1748,95 @@ bool PointMap::write( ofstream& stream, int version )
 void PointMap::convertAttributes(int which_attributes)
 {
    if (which_attributes & GraphVertexList::BASIC) {
-      int connectivity_col = m_attributes.insertLockedColumn("Connectivity");
+      int connectivity_col = m_attributes.insertOrResetLockedColumn("Connectivity");
       for (int i = 0; i < m_cols; i++) {
          for (int j = 0; j < m_rows; j++) {
             if (m_points[i][j].m_attributes) {
                // insert row...
-               int row = m_attributes.insertRow(PixelRef(i,j));
-               float val;
-               val = (float) m_points[i][j].getAttributes().getAttr(AttrHeader::NEIGHBOURHOOD_SIZE);
-               m_attributes.setValue(row, connectivity_col, val);
+                float val = (float) m_points[i][j].getAttributes().getAttr(AttrHeader::NEIGHBOURHOOD_SIZE);
+                m_attributes.addRow(PixelRef(i,j)).setValue(connectivity_col, val);
             }
          }
       }
    }
    if (which_attributes & GraphVertexList::LOCAL) {
-      int cluster_col = m_attributes.insertColumn("Visual Clustering Coefficient");
-      int control_col = m_attributes.insertColumn("Visual Control");
-      int controllability_col = m_attributes.insertColumn("Visual Controllability");
+      int cluster_col = m_attributes.insertOrResetColumn("Visual Clustering Coefficient");
+      int control_col = m_attributes.insertOrResetColumn("Visual Control");
+      int controllability_col = m_attributes.insertOrResetColumn("Visual Controllability");
       for (int i = 0; i < m_cols; i++) {
          for (int j = 0; j < m_rows; j++) {
             if (m_points[i][j].m_attributes) {
-               int row = m_attributes.getRowid(PixelRef(i,j));
+               auto& row = m_attributes.getRow(PixelRef(i,j));
                float val;
                val = (float) m_points[i][j].getAttributes().getAttr(AttrHeader::CLUSTER);
-               m_attributes.setValue(row, cluster_col, val);
+               row.setValue(cluster_col, val);
                val = (float) m_points[i][j].getAttributes().getAttr(AttrHeader::CONTROL_HILL);
-               m_attributes.setValue(row, control_col, val);
+               row.setValue(control_col, val);
                val = (float) m_points[i][j].getAttributes().getAttr(AttrHeader::CONTROL_TURN);
-               m_attributes.setValue(row, controllability_col, val);
+               row.setValue(controllability_col, val);
             }
          }
       }
    }
    if (which_attributes & GraphVertexList::GLOBAL) {
-      int entropy_col = m_attributes.insertColumn("Visual Entropy");
-      int integ_hh_col = m_attributes.insertColumn("Visual Integration [HH]");
-      int integ_tk_col = m_attributes.insertColumn("Visual Integration [Tekl]");
-      int depth_col = m_attributes.insertColumn("Visual Mean Depth");
-      int count_col = m_attributes.insertColumn("Visual Node Count");
-      int rel_entropy_col = m_attributes.insertColumn("Visual Relativised Entropy");
+      int entropy_col = m_attributes.insertOrResetColumn("Visual Entropy");
+      int integ_hh_col = m_attributes.insertOrResetColumn("Visual Integration [HH]");
+      int integ_tk_col = m_attributes.insertOrResetColumn("Visual Integration [Tekl]");
+      int depth_col = m_attributes.insertOrResetColumn("Visual Mean Depth");
+      int count_col = m_attributes.insertOrResetColumn("Visual Node Count");
+      int rel_entropy_col = m_attributes.insertOrResetColumn("Visual Relativised Entropy");
       for (int i = 0; i < m_cols; i++) {
          for (int j = 0; j < m_rows; j++) {
             if (m_points[i][j].m_attributes) {
-               int row = m_attributes.getRowid(PixelRef(i,j));
+               auto& row = m_attributes.getRow(PixelRef(i,j));
                float val;
                val = (float) m_points[i][j].getAttributes().getAttr(AttrHeader::ENTROPY);
-               m_attributes.setValue(row, entropy_col, val);
+               row.setValue(entropy_col, val);
                val = (float) m_points[i][j].getAttributes().getAttr(AttrHeader::REL_ENTROPY);
-               m_attributes.setValue(row, rel_entropy_col, val);
+               row.setValue(rel_entropy_col, val);
                val = (float) m_points[i][j].getAttributes().getAttr(AttrHeader::INTEGRATION_HILL);
-               m_attributes.setValue(row, integ_hh_col, val);
+               row.setValue(integ_hh_col, val);
                val = (float) m_points[i][j].getAttributes().getAttr(AttrHeader::INTEGRATION_TEKL);
-               m_attributes.setValue(row, integ_tk_col, val);
+               row.setValue(integ_tk_col, val);
                val = (float) m_points[i][j].getAttributes().getAttr(AttrHeader::MEAN_DEPTH);
-               m_attributes.setValue(row, depth_col, val);
+               row.setValue(depth_col, val);
                val = (float) m_points[i][j].getAttributes().getAttr(AttrHeader::GRAPH_SIZE);
-               m_attributes.setValue(row, count_col, val);
+               row.setValue(count_col, val);
             }
          }
       }
    }
    if (which_attributes & GraphVertexList::POINTDEPTH) {
-      int col = m_attributes.insertColumn("Visual Step Depth");
+      int col = m_attributes.insertOrResetColumn("Visual Step Depth");
       for (int i = 0; i < m_cols; i++) {
          for (int j = 0; j < m_rows; j++) {
             if (m_points[i][j].m_attributes) {
-               int row = m_attributes.getRowid(PixelRef(i,j));
-               float val;
-               val = (float) m_points[i][j].getAttributes().getAttr(AttrHeader::POINT_DEPTH);
-               m_attributes.setValue(row, col, val);
+               auto& row = m_attributes.getRow(PixelRef(i,j));
+               float val = (float) m_points[i][j].getAttributes().getAttr(AttrHeader::POINT_DEPTH);
+               row.setValue(col, val);
             }
          }
       }
    }
    if (which_attributes & GraphVertexList::METRIC) {
-      int mspa_col = m_attributes.insertColumn("Metric Mean Shortest-Path Angle");
-      int mspl_col = m_attributes.insertColumn("Metric Mean Shortest-Path Distance");
-      int dist_col = m_attributes.insertColumn("Metric Mean Straight-Line Distance");
-      int count_col = m_attributes.insertColumn("Metric Node Count");
+      int mspa_col = m_attributes.insertOrResetColumn("Metric Mean Shortest-Path Angle");
+      int mspl_col = m_attributes.insertOrResetColumn("Metric Mean Shortest-Path Distance");
+      int dist_col = m_attributes.insertOrResetColumn("Metric Mean Straight-Line Distance");
+      int count_col = m_attributes.insertOrResetColumn("Metric Node Count");
       for (int i = 0; i < m_cols; i++) {
          for (int j = 0; j < m_rows; j++) {
             if (m_points[i][j].m_attributes) {
-               int row = m_attributes.getRowid(PixelRef(i,j));
+               auto& row = m_attributes.getRow(PixelRef(i,j));
                double val, total = m_points[i][j].getAttributes().getAttr(AttrHeader::METRIC_GRAPH_SIZE);
                //
                val = m_points[i][j].getAttributes().getAttr(AttrHeader::TOTAL_METRIC_ANGLE) / total;
-               m_attributes.setValue(row, mspa_col, float(val));
+               row.setValue(mspa_col, float(val));
                val = m_points[i][j].getAttributes().getAttr(AttrHeader::TOTAL_METRIC_DEPTH) / total;
-               m_attributes.setValue(row, mspl_col, float(val));
+               row.setValue(mspl_col, float(val));
                val = m_points[i][j].getAttributes().getAttr(AttrHeader::TOTAL_EUCLID_DIST) / total;
-               m_attributes.setValue(row, dist_col, float(val));
+               row.setValue(dist_col, float(val));
                //
-               m_attributes.setValue(row, count_col, float(total));
+               row.setValue(count_col, float(total));
             }
          }
       }
@@ -1976,7 +1974,7 @@ bool PointMap::binMap( Communicator *comm )
 
             if (!getPoint(curs).m_node) {
                getPoint( curs ).m_node = new Node;
-               m_attributes.insertRow( curs );
+               m_attributes.addRow( curs );
             }
 
             Point2f point = depixelate(curs);
@@ -2011,207 +2009,6 @@ bool PointMap::binMap( Communicator *comm )
 }
 
 
-//////////////////////////////////////////////////////////////////////////////////
-
-// The fast way to generate graphs!
-
-// #include "sparksieve.h"
-
-// DEPRECATED!!!!!!
-/*
-bool PointMap::sparkGraph( Communicator *comm )
-{
-   // Note, graph must be fixed (i.e., having blocking pixels filled in)
-   if (!m_spacepix) {
-      return false;
-   }
-
-   // pre-label --- allows faster node access later on
-   int count = tagState( true, true );
-
-   // start the timer when you know the true count including fixed points
-   int atime = 0;
-   if (comm) {
-      qtimer( atime, 0 );
-      comm->CommPostMessage( Communicator::NUM_RECORDS, count );
-   }
-
-   // attributes table set up
-   // n.b. these must be entered in alphabetical order to preserve col indexing:
-   int connectivity_col = m_attributes.insertLockedColumn("Connectivity");
-   int maxradial_col = m_attributes.insertColumn("Isovist Maximum Radial");
-   //int maxradial_node_col = m_attributes.insertColumn("Maximum Radial (Node ID)");
-   int moment_col = m_attributes.insertColumn("Isovist Moment of Inertia");
-   //
-   pvecint bins[ GraphVertex::bin_count ];
-   pvector<PixelRef> bins_b[32];
-   static float far_bin_dists[32];
-   for (int ii = 0; ii < 32; ii++) {
-      far_bin_dists[ii] = 0.0f;
-   }
-
-   count = 0;
-
-   for (int i = 0; i < m_cols; i++) {
-
-      for (int j = 0; j < m_rows; j++) {
-
-         PixelRef curs = PixelRef( i, j );
-
-         if ( getPoint( curs ).getState() & Point::FILLED ) {
-
-            if (getPoint(curs).m_node) {
-               delete getPoint(curs).m_node;
-            }
-            getPoint( curs ).m_node = new Node;
-
-            m_attributes.insertRow( curs );
-
-            int neighbourhood_size = 0;
-            int max_depth = 0;
-            int far_node = -1;
-            double far_dist = 0.0;
-            double total_dist_sqr = 0.0;
-
-            // note: blocked points (for now) do not see out
-            for (int q = 0; q < 8; q++) {
-
-               int standardbin;
-               switch (q) { 
-                  case 1: standardbin =  0; break;
-                  case 3: standardbin = 32; break;
-                  case 0: case 2: standardbin = 16; break;
-                  case 4: case 5: standardbin = 24; break;
-                  case 6: case 7: standardbin =  8; break;
-               }
-
-               sparkSieve sieve( sparkSieve::rotateMask(getPoint(curs).getBlock(), q) );
-
-               int depth = 0;
-
-               for (depth = 1; sieve.hasGaps(); depth++) {
-
-                  pvecint trialsetin, trialsetout;
-
-                  for (int ind = 0; ind < depth + 1; ind++) {
-
-                     // x and y are calculated using Grad's whichbin q quadrants
-
-                     int x = (q >= 4 ? ind : depth);
-                     int y = (q >= 4 ? depth : ind);
-
-                     PixelRef here = PixelRef( 
-                        i + (q % 2 ? x : -x), j + (q <= 1 || q >= 6 ? y : -y) );
-
-                     if (here.x < 0 || here.y < 0 || here.x >= m_cols || here.y >= m_rows) {
-                        // Outside point grid
-                        trialsetin.push_back( -1 );
-                        trialsetout.push_back( -1 );
-                     }
-                     else if (getPoint(here).getBlock()) {
-                        // Blocked
-                        trialsetin.push_back( sparkSieve::rotateMask(getPoint(here).getBlock(),q) );
-                        trialsetout.push_back( -1 );
-                     }
-                     else {
-                        // Empty or (space) filled
-                        trialsetin.push_back( 0 );
-                        trialsetout.push_back( -1 );
-                     }
-                  }
-
-                  sieve.Sieve( trialsetin, trialsetout );
-
-                  for (int tri = ((q % 4 == 0 || (q + 1) % 4 == 0) ? 1 : 0);  // avoid duplicating axes
-                       tri < ((q / 4) ? depth : depth + 1);                 // avoid duplicating diagonals
-                       tri++) {
-                     if (trialsetout[tri] > -1) {
-
-                        int quoi = trialsetout[tri];
-
-                        int x = (q >= 4 ? tri : depth);
-                        int y = (q >= 4 ? depth : tri);
-
-                        PixelRef here = PixelRef( 
-                           i + (q % 2 ? x : -x), j + (q <= 1 || q >= 6 ? y : -y) );
-
-                        // oh god, yet another whichbin calculation...
-                        int bin = ((q % 4 == 0 || (q + 1) % 4 == 0) ? 
-                           (standardbin - trialsetout[tri]) :
-                           (standardbin + trialsetout[tri]));
-
-                        //if (!getPoint(here).empty()) {
-
-                           if (getPoint(here).getState() & Point::FILLED) {
-                              // the blocked cells shouldn't contribute to point stats
-                              // note m_spacing is used to scale far_dist appropriately
-                              double this_dist = dist(here,curs) * m_spacing;
-                              if (this_dist > far_dist) {
-                                 far_node = here;
-                                 far_dist = this_dist;
-                              }
-                              total_dist_sqr += this_dist * this_dist;
-                              neighbourhood_size++;
-
-                              bins_b[bin].push_back( here );
-
-                           }
-
-                        //}
-                     }
-                  }
-               }
-            }
-            Point2f point = depixelate(curs);
-
-            // Remember to clear these bins in the make function!
-            Point& pt = getPoint( curs );
-            pt.m_node->make(curs, bins_b, far_bin_dists, 0x00FF);
-            int row = m_attributes.insertRow( curs );
-            m_attributes.setValue( row, connectivity_col, float(neighbourhood_size) );
-            m_attributes.setValue( row, maxradial_col, float(far_dist) );
-            //m_attributes.setValue( row, maxradial_node_col, far_node );
-            m_attributes.setValue( row, moment_col, float(total_dist_sqr * m_spacing * m_spacing) );
-
-            count++;    // <- increment count
-
-            if (comm) {
-               if (qtimer( atime, 500 )) {
-                  if (comm->IsCancelled()) {
-                     tagState( false, true );         // <- the state field has been used for tagging visited nodes... set back to a state variable
-                     // (well, actually, no it hasn't!)
-                     // Should clear all nodes and attributes here:
-                     // Clear nodes
-                     for (int ii = 0; ii < m_cols; ii++) {
-                        for (int jj = 0; jj < m_rows; jj++) {
-                           if (m_points[ii][jj].m_node) {
-                              delete m_points[ii][jj].m_node;
-                              m_points[ii][jj].m_node = NULL;
-                           }
-                        }
-                     }
-                     // Clear attributes
-                     m_attributes.clear();
-                     m_displayed_attribute = -2;
-                     //
-                     throw Communicator::CancelledException();
-                  }
-                  comm->CommPostMessage( Communicator::CURRENT_RECORD, count );
-               }         
-            }
-         }
-      }
-   }
-
-   tagState( false, true );  // <- the state field has been used for tagging visited nodes... set back to a state variable
-
-   // override and reset:
-   m_displayed_attribute = -2;
-   setDisplayedAttribute(connectivity_col);
-
-   return true;
-}
-*/
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "sparksieve2.h"
@@ -2256,9 +2053,9 @@ bool PointMap::sparkGraph2( Communicator *comm, bool boundarygraph, double maxdi
 
    // attributes table set up
    // n.b. these must be entered in alphabetical order to preserve col indexing:
-   int connectivity_col = m_attributes.insertLockedColumn("Connectivity");
-   m_attributes.insertColumn("Point First Moment");
-   m_attributes.insertColumn("Point Second Moment");
+   int connectivity_col = m_attributes.insertOrResetLockedColumn("Connectivity");
+   m_attributes.insertOrResetColumn("Point First Moment");
+   m_attributes.insertOrResetColumn("Point Second Moment");
 
    // pre-label --- allows faster node access later on
    int count = tagState( true, true );
@@ -2287,7 +2084,7 @@ bool PointMap::sparkGraph2( Communicator *comm, bool boundarygraph, double maxdi
          if ( getPoint( curs ).getState() & Point::FILLED ) {
 
             getPoint( curs ).m_node = new Node;
-            m_attributes.insertRow( curs );
+            m_attributes.addRow( curs );
 
             sparkPixel2(curs,1,maxdist); // make flag of 1 suggests make this node, don't set reciprocral process flags on those you can see
                                          // maxdist controls how far to see out to
@@ -2492,10 +2289,10 @@ bool PointMap::sparkPixel2(PixelRef curs, int make, double maxdist)
       // The bins are cleared in the make function!
       Point& pt = getPoint( curs );
       pt.m_node->make(curs, bins_b, far_bin_dists, pt.m_processflag);   // note: make clears bins!
-      int row = m_attributes.getRowid( curs );
-      m_attributes.setValue( row, "Connectivity", float(neighbourhood_size) );
-      m_attributes.setValue( row, "Point First Moment", float(total_dist) );
-      m_attributes.setValue( row, "Point Second Moment", float(total_dist_sqr) );
+      auto& row = m_attributes.getRow( curs );
+      row.setValue( "Connectivity", float(neighbourhood_size) );
+      row.setValue( "Point First Moment", float(total_dist) );
+      row.setValue( "Point Second Moment", float(total_dist_sqr) );
    }
    else {
       // Clear bins by hand if not using them to make
@@ -2569,11 +2366,7 @@ bool PointMap::sieve2(sparkSieve2& sieve, pvector<PixelRef>& addlist, int q, int
 
 bool PointMap::binDisplay(Communicator *comm)
 {
-   int bindisplay_col = m_attributes.insertColumn("Node Bins");
-
-   for (int i = 0; i < m_attributes.getRowCount(); i++) {
-      m_attributes.setValue( i, bindisplay_col, -1 );
-   }
+   int bindisplay_col = m_attributes.insertOrResetColumn("Node Bins");
 
    for (size_t k = 0; k < m_selection_set.size(); k++) {
       Point& p = getPoint(m_selection_set[k]);
@@ -2584,9 +2377,7 @@ bool PointMap::binDisplay(Communicator *comm)
          Bin& b = p.m_node->bin(i);
          b.first();
          while(!b.is_tail()) {
-            int row = m_attributes.getRowid( b.cursor() );
-            //m_attributes.setValue( row, bindisplay_col, float((i % 8) + 1) );
-            m_attributes.setValue( row, bindisplay_col, float(b.distance()) );
+            m_attributes.getRow( b.cursor() ).setValue( bindisplay_col, float(b.distance()) );
             b.next();   
          }
       }
@@ -2624,6 +2415,7 @@ bool PointMap::analyseIsovist(Communicator *comm, MetaGraph& mgraph, bool simple
    }
    int count = 0;
 
+   addIsovistColumns(m_attributes, simple_version);
    for (int i = 0; i < m_cols; i++) {
       for (int j = 0; j < m_rows; j++) {
          PixelRef curs = PixelRef( i, j );
@@ -2634,9 +2426,9 @@ bool PointMap::analyseIsovist(Communicator *comm, MetaGraph& mgraph, bool simple
             }
             Isovist isovist;
             mgraph.makeIsovist(depixelate(curs),isovist);
-            int row = m_attributes.getRowid(curs);
+            auto& row = m_attributes.getRow(curs);
 
-            isovist.setData(m_attributes,row, simple_version);
+            isovist.setData(row, simple_version);
             Node& node = getPoint(curs).getNode();
             pvector<PixelRef> *occ = node.m_occlusion_bins;
             size_t k;
@@ -2693,9 +2485,9 @@ bool PointMap::analyseVisual(Communicator *comm, Options& options, bool simple_v
    int cluster_col, control_col, controllability_col;
    if(!simple_version) {
        if (options.local) {
-           cluster_col = m_attributes.insertColumn("Visual Clustering Coefficient");
-           control_col = m_attributes.insertColumn("Visual Control");
-           controllability_col = m_attributes.insertColumn("Visual Controllability");
+           cluster_col = m_attributes.insertOrResetColumn("Visual Clustering Coefficient");
+           control_col = m_attributes.insertOrResetColumn("Visual Control");
+           controllability_col = m_attributes.insertOrResetColumn("Visual Controllability");
        }
    }
 #endif
@@ -2712,25 +2504,25 @@ bool PointMap::analyseVisual(Communicator *comm, Options& options, bool simple_v
 #ifndef _COMPILE_dX_SIMPLE_VERSION
       if(!simple_version) {
           std::string entropy_col_text = std::string("Visual Entropy") + radius_text;
-          entropy_col = m_attributes.insertColumn(entropy_col_text.c_str());
+          entropy_col = m_attributes.insertOrResetColumn(entropy_col_text.c_str());
       }
 #endif
 
       std::string integ_dv_col_text = std::string("Visual Integration [HH]") + radius_text;
-      integ_dv_col = m_attributes.insertColumn(integ_dv_col_text.c_str());
+      integ_dv_col = m_attributes.insertOrResetColumn(integ_dv_col_text.c_str());
 
 #ifndef _COMPILE_dX_SIMPLE_VERSION
       if(!simple_version) {
           std::string integ_pv_col_text = std::string("Visual Integration [P-value]") + radius_text;
-          integ_pv_col = m_attributes.insertColumn(integ_pv_col_text.c_str());
+          integ_pv_col = m_attributes.insertOrResetColumn(integ_pv_col_text.c_str());
           std::string integ_tk_col_text = std::string("Visual Integration [Tekl]") + radius_text;
-          integ_tk_col = m_attributes.insertColumn(integ_tk_col_text.c_str());
+          integ_tk_col = m_attributes.insertOrResetColumn(integ_tk_col_text.c_str());
           std::string depth_col_text = std::string("Visual Mean Depth") + radius_text;
-          depth_col = m_attributes.insertColumn(depth_col_text.c_str());
+          depth_col = m_attributes.insertOrResetColumn(depth_col_text.c_str());
           std::string count_col_text = std::string("Visual Node Count") + radius_text;
-          count_col = m_attributes.insertColumn(count_col_text.c_str());
+          count_col = m_attributes.insertOrResetColumn(count_col_text.c_str());
           std::string rel_entropy_col_text = std::string("Visual Relativised Entropy") + radius_text;
-          rel_entropy_col = m_attributes.insertColumn(rel_entropy_col_text.c_str());
+          rel_entropy_col = m_attributes.insertOrResetColumn(rel_entropy_col_text.c_str());
       }
 #endif
    }
@@ -2798,17 +2590,17 @@ bool PointMap::analyseVisual(Communicator *comm, Options& options, bool simple_v
                   }
                   level++;
                }
-               int row = m_attributes.getRowid(curs);
+               auto& row = m_attributes.getRow(curs);
                // only set to single float precision after divide
                // note -- total_nodes includes this one -- mean depth as per p.108 Social Logic of Space
                if(!simple_version) {
-                    m_attributes.setValue(row, count_col, float(total_nodes) ); // note: total nodes includes this one
+                    row.setValue(count_col, float(total_nodes) ); // note: total nodes includes this one
                }
                // ERROR !!!!!!
                if (total_nodes > 1) {
                   double mean_depth = double(total_depth) / double(total_nodes - 1);
                   if(!simple_version) {
-                        m_attributes.setValue(row, depth_col, float(mean_depth) );
+                        row.setValue(depth_col, float(mean_depth) );
                   }
                   // total nodes > 2 to avoid divide by 0 (was > 3)
                   if (total_nodes > 2 && mean_depth > 1.0) {
@@ -2817,26 +2609,26 @@ bool PointMap::analyseVisual(Communicator *comm, Options& options, bool simple_v
                      double rra_d = ra / dvalue(total_nodes);
                      double rra_p = ra / pvalue(total_nodes);
                      double integ_tk = teklinteg(total_nodes, total_depth);
-                     m_attributes.setValue(row,integ_dv_col,float(1.0/rra_d));
+                     row.setValue(integ_dv_col,float(1.0/rra_d));
                      if(!simple_version) {
-                          m_attributes.setValue(row,integ_pv_col,float(1.0/rra_p));
+                          row.setValue(integ_pv_col,float(1.0/rra_p));
                      }
                      if (total_depth - total_nodes + 1 > 1) {
                         if(!simple_version) {
-                            m_attributes.setValue(row,integ_tk_col,float(integ_tk));
+                            row.setValue(integ_tk_col,float(integ_tk));
                         }
                      }
                      else {
                         if(!simple_version) {
-                            m_attributes.setValue(row,integ_tk_col,-1.0f);
+                            row.setValue(integ_tk_col,-1.0f);
                         }
                      }
                   }
                   else {
-                     m_attributes.setValue(row,integ_dv_col,(float)-1);
+                     row.setValue(integ_dv_col,(float)-1);
                      if(!simple_version) {
-                        m_attributes.setValue(row,integ_pv_col,(float)-1);
-                        m_attributes.setValue(row,integ_tk_col,(float)-1);
+                        row.setValue(integ_pv_col,(float)-1);
+                        row.setValue(integ_tk_col,(float)-1);
                      }
                   }
                   double entropy = 0.0, rel_entropy = 0.0, factorial = 1.0;
@@ -2853,21 +2645,21 @@ bool PointMap::analyseVisual(Communicator *comm, Options& options, bool simple_v
                      }
                   }
                   if(!simple_version) {
-                    m_attributes.setValue(row, entropy_col, float(entropy) );
-                    m_attributes.setValue(row, rel_entropy_col, float(rel_entropy) );
+                    row.setValue(entropy_col, float(entropy) );
+                    row.setValue(rel_entropy_col, float(rel_entropy) );
                   }
                }
                else {
                   if(!simple_version) {
-                    m_attributes.setValue(row, depth_col,(float)-1);
-                    m_attributes.setValue(row, entropy_col,(float)-1);
-                    m_attributes.setValue(row, rel_entropy_col,(float)-1);
+                    row.setValue(depth_col,(float)-1);
+                    row.setValue(entropy_col,(float)-1);
+                    row.setValue(rel_entropy_col,(float)-1);
                   }
                }
             }
             if (options.local) {
 
-               int row = m_attributes.getRowid(curs);
+               auto& row = m_attributes.getRow(curs);
 
                // This is much easier to do with a straight forward list:
                PixelRefList neighbourhood;
@@ -2897,14 +2689,14 @@ bool PointMap::analyseVisual(Communicator *comm, Options& options, bool simple_v
 #ifndef _COMPILE_dX_SIMPLE_VERSION
                if(!simple_version) {
                    if (neighbourhood.size() > 1) {
-                       m_attributes.setValue(row, cluster_col, float(cluster / double(neighbourhood.size() * (neighbourhood.size() - 1.0))) );
-                       m_attributes.setValue(row, control_col, float(control) );
-                       m_attributes.setValue(row, controllability_col, float( double(neighbourhood.size()) / double(totalneighbourhood.size())) );
+                       row.setValue(cluster_col, float(cluster / double(neighbourhood.size() * (neighbourhood.size() - 1.0))) );
+                       row.setValue(control_col, float(control) );
+                       row.setValue(controllability_col, float( double(neighbourhood.size()) / double(totalneighbourhood.size())) );
                    }
                    else {
-                       m_attributes.setValue(row, cluster_col, -1 );
-                       m_attributes.setValue(row, control_col, -1 );
-                       m_attributes.setValue(row, controllability_col, -1 );
+                       row.setValue(cluster_col, -1 );
+                       row.setValue(control_col, -1 );
+                       row.setValue(controllability_col, -1 );
                    }
                }
 #endif
@@ -2939,10 +2731,10 @@ bool PointMap::analyseVisual(Communicator *comm, Options& options, bool simple_v
 bool PointMap::analyseVisualPointDepth(Communicator *comm)
 {
    // n.b., insert columns sets values to -1 if the column already exists
-   int col = m_attributes.insertColumn("Visual Step Depth");
+   int col = m_attributes.insertOrResetColumn("Visual Step Depth");
 
-   for (int i = 0; i < m_attributes.getRowCount(); i++) {
-      PixelRef pix = m_attributes.getRowKey(i);
+   for (auto& row : m_attributes) {
+      PixelRef pix = row.getKey().value;
       getPoint(pix).m_misc = 0;
       getPoint(pix).m_extent = pix;
    }
@@ -2960,16 +2752,14 @@ bool PointMap::analyseVisualPointDepth(Communicator *comm)
       for (size_t n = search_tree[level].size() - 1; n != paftl::npos; n--) {
          Point& p = getPoint(search_tree[level][n]);
          if (p.filled() && p.m_misc != ~0) {
-            int row = m_attributes.getRowid(search_tree[level][n]);
-            m_attributes.setValue(row,col,float(level));
+            m_attributes.getRow(search_tree[level][n]).setValue(col,float(level));
             if (!p.contextfilled() || search_tree[level][n].iseven() || level == 0) {
                p.m_node->extractUnseen(search_tree[level+1],this,p.m_misc);
                p.m_misc = ~0;
                if (!p.m_merge.empty()) {
                   Point& p2 = getPoint(p.m_merge);
                   if (p2.m_misc != ~0) {
-                     int row = m_attributes.getRowid(p.m_merge);
-                     m_attributes.setValue(row,col,float(level));
+                     m_attributes.getRow(p.m_merge).setValue(row,col,float(level));
                      p2.m_node->extractUnseen(search_tree[level+1],this,p2.m_misc); // did say p.misc
                      p2.m_misc = ~0;
                   }
@@ -3020,13 +2810,13 @@ bool PointMap::analyseMetric(Communicator *comm, Options& options)
    }
    // n.b. these must be entered in alphabetical order to preserve col indexing:
    std::string mspa_col_text = std::string("Metric Mean Shortest-Path Angle") + radius_text;
-   int mspa_col = m_attributes.insertColumn(mspa_col_text.c_str());
+   int mspa_col = m_attributes.insertOrResetColumn(mspa_col_text.c_str());
    std::string mspl_col_text = std::string("Metric Mean Shortest-Path Distance") + radius_text;
-   int mspl_col = m_attributes.insertColumn(mspl_col_text.c_str());
+   int mspl_col = m_attributes.insertOrResetColumn(mspl_col_text.c_str());
    std::string dist_col_text = std::string("Metric Mean Straight-Line Distance") + radius_text;
-   int dist_col = m_attributes.insertColumn(dist_col_text.c_str());
+   int dist_col = m_attributes.insertOrResetColumn(dist_col_text.c_str());
    std::string count_col_text = std::string("Metric Node Count") + radius_text;
-   int count_col = m_attributes.insertColumn(count_col_text.c_str());
+   int count_col = m_attributes.insertOrResetColumn(count_col_text.c_str());
 
    int count = 0;
 
@@ -3088,11 +2878,11 @@ bool PointMap::analyseMetric(Communicator *comm, Options& options)
                }
             }
 
-            int row = m_attributes.getRowid(curs);
-            m_attributes.setValue(row, mspa_col, float(double(total_angle) / double(total_nodes)) );
-            m_attributes.setValue(row, mspl_col, float(double(total_depth) / double(total_nodes)) );
-            m_attributes.setValue(row, dist_col, float(double(euclid_depth) / double(total_nodes)) );
-            m_attributes.setValue(row, count_col, float(total_nodes) );
+            auto& row = m_attributes.getRow(curs);
+            row.setValue(mspa_col, float(double(total_angle) / double(total_nodes)) );
+            row.setValue(mspl_col, float(double(total_depth) / double(total_nodes)) );
+            row.setValue(dist_col, float(double(euclid_depth) / double(total_nodes)) );
+            row.setValue(count_col, float(total_nodes) );
 
             count++;    // <- increment count
          }
@@ -3116,16 +2906,16 @@ bool PointMap::analyseMetric(Communicator *comm, Options& options)
 bool PointMap::analyseMetricPointDepth(Communicator *comm)
 {
    // n.b., insert columns sets values to -1 if the column already exists
-   int path_angle_col = m_attributes.insertColumn("Metric Step Shortest-Path Angle");
-   int path_length_col = m_attributes.insertColumn("Metric Step Shortest-Path Length");
+   int path_angle_col = m_attributes.insertOrResetColumn("Metric Step Shortest-Path Angle");
+   int path_length_col = m_attributes.insertOrResetColumn("Metric Step Shortest-Path Length");
    int dist_col;
    if (m_selection_set.size() == 1) {
       // Note: Euclidean distance is currently only calculated from a single point
-      dist_col = m_attributes.insertColumn("Metric Straight-Line Distance");
+      dist_col = m_attributes.insertOrResetColumn("Metric Straight-Line Distance");
    }
 
-   for (int i = 0; i < m_attributes.getRowCount(); i++) {
-      PixelRef pix = m_attributes.getRowKey(i);
+   for (auto& row : m_attributes) {
+      PixelRef pix = row.getKey().value;
       getPoint(pix).m_misc = 0;
       getPoint(pix).m_dist = -1.0f;
       getPoint(pix).m_cumangle = 0.0f;
@@ -3150,23 +2940,23 @@ bool PointMap::analyseMetricPointDepth(Communicator *comm)
       if (p.filled() && p.m_misc != ~0) {
          p.m_node->extractMetric(search_list,this,here);
          p.m_misc = ~0;
-         int row = m_attributes.getRowid(here.pixel);
-         m_attributes.setValue(row, path_length_col, float(m_spacing * here.dist) );
-         m_attributes.setValue(row, path_angle_col, float(p.m_cumangle) );
+         auto& row = m_attributes.getRow(here.pixel);
+         row.setValue(path_length_col, float(m_spacing * here.dist) );
+         row.setValue(path_angle_col, float(p.m_cumangle) );
          if (m_selection_set.size() == 1) {
             // Note: Euclidean distance is currently only calculated from a single point
-            m_attributes.setValue(row, dist_col, float(m_spacing * dist(here.pixel,m_selection_set[0])) );
+            row.setValue(dist_col, float(m_spacing * dist(here.pixel,m_selection_set[0])) );
          }
          if (!p.m_merge.empty()) {
             Point& p2 = getPoint(p.m_merge);
             if (p2.m_misc != ~0) {
                p2.m_cumangle = p.m_cumangle;
-               int row = m_attributes.getRowid(p.m_merge);
-               m_attributes.setValue(row, path_length_col, float(m_spacing * here.dist) );
-               m_attributes.setValue(row, path_angle_col, float(p2.m_cumangle) );
+               auto& row = m_attributes.getRow(p.m_merge);
+               row.setValue(path_length_col, float(m_spacing * here.dist) );
+               row.setValue(path_angle_col, float(p2.m_cumangle) );
                if (m_selection_set.size() == 1) {
                   // Note: Euclidean distance is currently only calculated from a single point
-                  m_attributes.setValue(row, dist_col, float(m_spacing * dist(p.m_merge,m_selection_set[0])) );
+                  row.setValue(dist_col, float(m_spacing * dist(p.m_merge,m_selection_set[0])) );
                }
                p2.m_node->extractMetric(search_list,this,MetricTriple(here.dist,p.m_merge,NoPixel));
                p2.m_misc = ~0;
@@ -3213,11 +3003,11 @@ bool PointMap::analyseAngular(Communicator *comm, Options& options)
    }
    // n.b. these must be entered in alphabetical order to preserve col indexing:
    std::string mean_depth_col_text = std::string("Angular Mean Depth") + radius_text;
-   int mean_depth_col = m_attributes.insertColumn(mean_depth_col_text.c_str());
+   int mean_depth_col = m_attributes.insertOrResetColumn(mean_depth_col_text.c_str());
    std::string total_detph_col_text = std::string("Angular Total Depth") + radius_text;
-   int total_depth_col = m_attributes.insertColumn(total_detph_col_text.c_str());
+   int total_depth_col = m_attributes.insertOrResetColumn(total_detph_col_text.c_str());
    std::string count_col_text = std::string("Angular Node Count") + radius_text;
-   int count_col = m_attributes.insertColumn(count_col_text.c_str());
+   int count_col = m_attributes.insertOrResetColumn(count_col_text.c_str());
 
    int count = 0;
 
@@ -3276,12 +3066,12 @@ bool PointMap::analyseAngular(Communicator *comm, Options& options)
                }
             }
 
-            int row = m_attributes.getRowid(curs);
+            auto& row = m_attributes.getRow(curs);
             if (total_nodes > 0) {
-               m_attributes.setValue(row, mean_depth_col, float(double(total_angle) / double(total_nodes)) );
+               row.setValue(mean_depth_col, float(double(total_angle) / double(total_nodes)) );
             }
-            m_attributes.setValue(row, total_depth_col, total_angle );
-            m_attributes.setValue(row, count_col, float(total_nodes) );
+            row.setValue(total_depth_col, total_angle );
+            row.setValue(count_col, float(total_nodes) );
 
             count++;    // <- increment count
          }
@@ -3305,10 +3095,10 @@ bool PointMap::analyseAngular(Communicator *comm, Options& options)
 bool PointMap::analyseAngularPointDepth(Communicator *comm)
 {
    // n.b., insert columns sets values to -1 if the column already exists
-   int path_angle_col = m_attributes.insertColumn("Angular Step Depth");
+   int path_angle_col = m_attributes.insertOrResetColumn("Angular Step Depth");
 
-   for (int i = 0; i < m_attributes.getRowCount(); i++) {
-      PixelRef pix = m_attributes.getRowKey(i);
+   for (auto& row : m_attributes) {
+      PixelRef pix = row.getKey().value;
       getPoint(pix).m_misc = 0;
       getPoint(pix).m_dist = 0.0f;
       getPoint(pix).m_cumangle = -1.0f;
@@ -3333,14 +3123,12 @@ bool PointMap::analyseAngularPointDepth(Communicator *comm)
       if (p.filled() && p.m_misc != ~0) {
          p.m_node->extractAngular(search_list,this,here);
          p.m_misc = ~0;
-         int row = m_attributes.getRowid(here.pixel);
-         m_attributes.setValue(row, path_angle_col, float(p.m_cumangle) );
+         m_attributes.getRow(here.pixel).setValue(path_angle_col, float(p.m_cumangle) );
          if (!p.m_merge.empty()) {
             Point& p2 = getPoint(p.m_merge);
             if (p2.m_misc != ~0) {
                p2.m_cumangle = p.m_cumangle;
-               int row = m_attributes.getRowid(p.m_merge);
-               m_attributes.setValue(row, path_angle_col, float(p2.m_cumangle) );
+               m_attributes.getRowid(p.m_merge).setValue(path_angle_col, float(p2.m_cumangle) );
                p2.m_node->extractAngular(search_list,this,AngularTriple(here.angle,p.m_merge,NoPixel));
                p2.m_misc = ~0;
             }
