@@ -226,8 +226,34 @@ namespace dXreimpl
         AttributeTable(){}
         AttributeTable(const AttributeTable& ) = delete;
         AttributeTable& operator =(const AttributeTable&) = delete;
+
+        ///
+        /// \brief Get a row reference
+        /// \param key of the row
+        /// \return reference to row, throws if key not found
+        ///
         AttributeRow& getRow(const RowKeyType& key );
+
+        ///
+        /// \brief Get a row const reference
+        /// \param key of the row
+        /// \return const reference to row, throws if key not found
+        ///
         const AttributeRow& getRow(const RowKeyType& key) const;
+
+        ///
+        /// \brief Get a row pointer
+        /// \param key of the row
+        /// \return pointer to row, null if key not found
+        ///
+        AttributeRow* getRowPtr(const RowKeyType& key);
+
+        ///
+        /// \brief Get a row const pointer
+        /// \param key of the row
+        /// \return const pointer to row, null if key not found
+        ///
+        const AttributeRow* getRowPtr(const RowKeyType& key)const;
         AttributeRow &addRow(const RowKeyType& key);
         AttributeColumn& getColumn(size_t index);
         size_t insertOrResetColumn(const std::string& columnName, const std::string &formula = std::string());
@@ -411,23 +437,45 @@ namespace dXreimpl
     template<class RowKeyType>
     AttributeRow &AttributeTable<RowKeyType>::getRow(const RowKeyType &key)
     {
-        auto iter = m_rows.find(key);
-        if (iter == m_rows.end())
+        auto* row = getRowPtr(key);
+        if (row == 0)
         {
             throw std::out_of_range("Invalid row key");
         }
-        return *iter->second;
+        return *row;
     }
 
     template<class RowKeyType>
     const AttributeRow& AttributeTable<RowKeyType>::getRow(const RowKeyType &key) const
     {
-        auto iter = m_rows.find(key);
-        if (iter == m_rows.end())
+        auto* row = getRowPtr(key);
+        if (row == 0)
         {
             throw std::out_of_range("Invalid row key");
         }
-        return *iter->second;
+        return *row;
+    }
+
+    template<typename RowKeyType>
+    AttributeRow *AttributeTable<RowKeyType>::getRowPtr(const RowKeyType &key)
+    {
+        auto iter = m_rows.find(key);
+        if (iter == m_rows.end())
+        {
+            return 0;
+        }
+        return iter->second.get();
+    }
+
+    template<typename RowKeyType>
+    const AttributeRow *AttributeTable<RowKeyType>::getRowPtr(const RowKeyType &key) const
+    {
+        auto iter = m_rows.find(key);
+        if (iter == m_rows.end())
+        {
+            return 0;
+        }
+        return iter->second.get();
     }
 
     template<class RowKeyType>
