@@ -274,6 +274,30 @@ TEST_CASE("test attribute table")
     }
 }
 
+TEST_CASE("Existing and non-existing rows")
+{
+    using namespace dXreimpl;
+    AttributeTable<SerialisedPixelRef> table;
+    table.getOrInsertColumn("col1");
+    table.getOrInsertColumn("col2");
+    table.addRow(0).setValue(0, 1.0f);
+    table.addRow(1).setValue(0, 0.5f);
+    table.addRow(2).setValue(0, 2.0f);
+
+    const AttributeTable<SerialisedPixelRef>& constRef = table;
+
+    table.getRow(0);
+    constRef.getRow(0);
+    REQUIRE_THROWS_AS(table.getRow(5), std::out_of_range);
+    REQUIRE_THROWS_AS(constRef.getRow(5), std::out_of_range);
+
+    REQUIRE( table.getRowPtr(1) != 0);
+    REQUIRE( constRef.getRowPtr(1) != 0);
+
+    REQUIRE( table.getRowPtr(5) == 0);
+    REQUIRE( constRef.getRowPtr(5) == 0);
+}
+
 TEST_CASE("normalised values"){
     using namespace dXreimpl;
     AttributeTable<SerialisedPixelRef> table;
