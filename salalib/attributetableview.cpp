@@ -18,7 +18,7 @@
 AttributeTableView::AttributeTableView(const dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef> &table) : m_table(table), m_displayColumn(-1)
 {}
 
-void AttributeTableView::setDisplayColumn(int columnIndex){
+void AttributeTableView::setDisplayColIndex(int columnIndex){
     if (columnIndex < 0)
     {
         m_displayColumn = -1;
@@ -50,7 +50,7 @@ const DisplayParams &AttributeTableView::getDisplayParams() const
     return m_table.getColumn(m_displayColumn).getDisplayParams();
 }
 
-void AttributeTableHandle::setDisplayColumn(int columnIndex){
+void AttributeTableHandle::setDisplayColIndex(int columnIndex){
     if (columnIndex < 0)
     {
         m_mutableIndex.clear();
@@ -60,5 +60,5 @@ void AttributeTableHandle::setDisplayColumn(int columnIndex){
         // recalculate the index even if it's the same column in case stuff has changed
         m_mutableIndex = dXreimpl::makeAttributeIndex<dXreimpl::AttributeIndexItem<dXreimpl::SerialisedPixelRef>>(m_mutableTable, columnIndex);
     }
-    AttributeTableView::setDisplayColumn(columnIndex);
+    AttributeTableView::setDisplayColIndex(columnIndex);
 }
