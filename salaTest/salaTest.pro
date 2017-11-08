@@ -19,7 +19,7 @@ SOURCES += main.cpp \
     testattributetableindex.cpp \
     testlayermanager.cpp \
     testattributetablehelpers.cpp \
-    testattributetableview.cpp
+    testattributetableview.cpp \
     testshapemaps.cpp \
     testgeometrygenerators.cpp
 
