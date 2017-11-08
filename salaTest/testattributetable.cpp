@@ -163,6 +163,15 @@ TEST_CASE("test attribute row")
 
     REQUIRE(copiedRow.getValue(0) == Approx(1.2f));
 
+    row.incrValue(0, 1.0f);
+    REQUIRE(row.getValue(0) == Approx(2.2f));
+    Verify(Method(col1,updateStats).Using(2.2f,1.2f)).Once();
+
+    AttributeRow& ifRef = row;
+    ifRef.incrValue(0);
+    REQUIRE(row.getValue(0) == Approx(3.2f));
+    Verify(Method(col1,updateStats).Using(3.2f,2.2f)).Once();
+
 
 }
 

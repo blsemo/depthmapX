@@ -232,3 +232,24 @@ void dXreimpl::AttributeRowImpl::checkIndex(size_t index) const
 }
 
 
+
+dXreimpl::AttributeRow &dXreimpl::AttributeRowImpl::incrValue(size_t index, float value)
+{
+    checkIndex(index);
+    float val = m_data[index];
+    if ( val < 0)
+    {
+        setValue(index, value);
+    }
+    else
+    {
+        setValue(index, val + value);
+    }
+    return *this;
+}
+
+
+dXreimpl::AttributeRow &dXreimpl::AttributeRowImpl::incrValue(const string &colName, float value)
+{
+    return incrValue(m_colManager.getColumnIndex(colName), value);
+}
