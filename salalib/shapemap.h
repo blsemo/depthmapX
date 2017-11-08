@@ -20,11 +20,16 @@
 #ifndef __SHAPEMAP_H__
 #define __SHAPEMAP_H__
 
-#include <string>
+#include "genlib/p2dpoly.h"
 #include "genlib/stringutils.h"
+#include <vector>
+#include <string>
+#include "salalib/importtypedefs.h"
+#include "genlib/bspnode.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
+#include <map>
 // each pixel has various lists of information:
 
 struct ShapeRef
@@ -260,7 +265,7 @@ public:
    // or a single line into a shape
    int makeLineShape(const Line& line, bool through_ui = false, bool tempshape = false);
    // or a polygon into a shape
-   int makePolyShape(const pvecpoint& points, bool open, bool tempshape = false);
+   int makePolyShape(const pqvector<Point2f>& points, bool open, bool tempshape = false);
 public:
    // or make a shape from a shape
    int makeShape(const SalaShape& shape, int override_shape_ref = -1);
@@ -285,7 +290,7 @@ public:
    bool polyCancel();
    // some shape creation tools for the scripting language or DLL interface
 protected:
-   pvecpoint m_temppoints;
+   pqvector<Point2f> m_temppoints;
 public:
    // add a shape (does not commit to poly pixels)
    void shapeBegin();
@@ -498,7 +503,6 @@ public:
    bool write( ofstream& stream, int version );
    //
    bool output( ofstream& stream, char delimiter = '\t', bool updated_only = false );
-   bool importTxt(istream& stream, bool csv);
    //
    // links and unlinks
 protected:
@@ -518,9 +522,11 @@ public:
    // generic for all types of graphs
    bool findNextLinkLine() const;
    Line getNextLinkLine() const;
+   std::vector<SimpleLine> getAllLinkLines();
    // specific to axial line graphs 
    bool findNextUnlinkPoint() const;
    Point2f getNextUnlinkPoint() const;
+   std::vector<Point2f> getAllUnlinkPoints();
    void outputUnlinkPoints( ofstream& stream, char delim );
 public:
    void ozlemSpecial(ShapeMap& output);
@@ -530,6 +536,14 @@ public:
    void ozlemSpecial5(ShapeMap& buildings);
    void ozlemSpecial6();
    void ozlemSpecial7(ShapeMap& linemap);
+   std::vector<SimpleLine> getAllShapesAsLines();
+   std::vector<std::pair<SimpleLine, PafColor>> getAllLinesWithColour();
+   std::map<std::vector<Point2f>, PafColor> getAllPolygonsWithColour();
+   bool importLines(const std::vector<Line> &lines, const depthmapX::Table &data);
+   bool importPoints(const std::vector<Point2f> &points, const depthmapX::Table &data);
+   bool importPolylines(const std::vector<depthmapX::Polyline> &lines, const depthmapX::Table &data);
+private:
+   bool importData(const depthmapX::Table &data, std::vector<int> indices);
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

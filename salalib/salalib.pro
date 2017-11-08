@@ -42,7 +42,9 @@ SOURCES += \
     gridproperties.cpp \
     attributetable.cpp \
     layermanagerimpl.cpp \
-    attributetableview.cpp
+    attributetableview.cpp \
+    geometrygenerators.cpp \
+    importutils.cpp
 
 HEADERS += \
     attributes.h \
@@ -71,12 +73,18 @@ HEADERS += \
     gridproperties.h \
     isovistdef.h \
     mgraph_consts.h \
+<<<<<<< HEAD
     attributetable.h \
     attributetableindex.h \
     layermanager.h \
     layermanagerimpl.h \
     attributetablehelpers.h \
     attributetableview.h
+=======
+    geometrygenerators.h \
+    importutils.h \
+    importtypedefs.h
+>>>>>>> b3e4a2e1ff8413301b1011e68435013935d8ceda
 
 DISTFILES += \
     salascript-tests.txt

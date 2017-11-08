@@ -55,7 +55,7 @@ int progcompare(const void *a, const void *b )
 
 //
 
-pvecpoint g_trails[MAX_TRAILS];
+pqvector<Point2f> g_trails[MAX_TRAILS];
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -71,6 +71,11 @@ AgentEngine::AgentEngine()
 
 void AgentEngine::run(Communicator *comm, PointMap *pointmap)
 {
+    for (size_t j = 0; j < size(); j++) {
+        if(at(j).m_sel_type == AgentProgram::SEL_LOS_OCC) {
+            pointmap->requireIsovistAnalysis();
+        }
+    }
    // Quick mod - TV
 #if defined(_WIN32)   
    __time64_t atime = 0;

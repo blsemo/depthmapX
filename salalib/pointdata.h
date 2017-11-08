@@ -18,6 +18,7 @@
 #ifndef __POINTDATA_H__
 #define __POINTDATA_H__
 
+#include "genlib/exceptions.h"
 #include "vertex.h"
 #include <vector>
 
@@ -189,6 +190,23 @@ public:
 
 class sparkSieve2;
 
+namespace depthmapX
+{
+    enum PointMapExceptionType{NO_ISOVIST_ANALYSIS};
+    class PointMapException: public depthmapX::RuntimeException {
+    private:
+        PointMapExceptionType m_errorType;
+    public:
+        PointMapException(PointMapExceptionType errorType, std::string message) : depthmapX::RuntimeException(message)
+        {
+            m_errorType = errorType;
+        }
+        PointMapExceptionType getErrorType() const {
+            return m_errorType;
+        }
+    };
+}
+
 class PointMap : public PixelBase
 {
    friend class PointMaps;
@@ -198,6 +216,8 @@ class PointMap : public PixelBase
    // pushValuesToLayer: this swaps values from a PointMap to a DataLayer, and it needs to be changed in the future
    // (e.g., when making DataLayers into ShapeMaps)
    friend class MetaGraph;
+private:
+   bool m_hasIsovistAnalysis = false;
 protected:
    std::string m_name;
    Point **m_points;    // will contain the graph reference when created
@@ -237,6 +257,16 @@ public:
    QtRegion regionate( const PixelRef& p, double border ) const;     // Inlined below
    bool setSpacePixel(const SuperSpacePixel *spacepix);  // (so different threads can use it... dangermouse!)
    bool setGrid(double spacing, const Point2f& offset = Point2f());
+   std::vector<std::pair<PixelRef, PixelRef>> getMergedPixelPairs()
+   {
+       // unnecessary converter until the m_merge_lines variable is
+       // replaced with a std container
+       std::vector<std::pair<PixelRef, PixelRef>> mergedPixelPairs;
+       for (size_t i = 0; i < m_merge_lines.size(); i++) {
+           mergedPixelPairs.push_back(std::make_pair(m_merge_lines[i].a, m_merge_lines[i].b));
+       }
+       return mergedPixelPairs;
+   }
    //
    bool isProcessed() const
    { return m_processed; }
@@ -316,6 +346,12 @@ public:
    int getPointCount() const
       { return m_point_count; }
    //
+   void requireIsovistAnalysis()
+   {
+       if(!m_hasIsovistAnalysis) {
+           throw depthmapX::PointMapException(depthmapX::PointMapExceptionType::NO_ISOVIST_ANALYSIS, "Current pointmap does not contain isovist analysis");
+       }
+   }
 protected:
    int expand( const PixelRef p1, const PixelRef p2, PixelRefList& list, int filltype );
    //
@@ -446,7 +482,8 @@ public:
    bool findNextMergeLine() const;
    Line getNextMergeLine() const;
    bool getPointSelected() const;
-   PafColor getPointColor() const;
+   PafColor getPointColor(PixelRef pixelRef) const;
+   PafColor getCurrentPointColor() const;
    int getSelCount()
       { return (int) m_selection_set.size(); }
    const QtRegion& getSelBounds() const

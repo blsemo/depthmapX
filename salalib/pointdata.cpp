@@ -1285,10 +1285,10 @@ bool PointMap::getPointSelected() const
    return false;
 }
 
-PafColor PointMap::getPointColor() const
+PafColor PointMap::getPointColor(PixelRef pixelRef) const
 {
    PafColor color;
-   int state = pointState( cur );
+   int state = pointState( pixelRef );
    if (state & Point::HIGHLIGHT) {
       return PafColor( SALA_HIGHLIGHTED_COLOR ); 
    }
@@ -1298,7 +1298,7 @@ PafColor PointMap::getPointColor() const
    else {
       if (state & Point::FILLED) {
          if (m_processed) {
-            return m_attributes.getDisplayColorByKey( cur );
+            return m_attributes.getDisplayColorByKey( pixelRef );
          }
          else if (state & Point::EDGE) {
             return PafColor( 0x0077BB77 );
@@ -1315,6 +1315,11 @@ PafColor PointMap::getPointColor() const
       }
    }
    return PafColor();   // <- note alpha channel set to transparent - will not be drawn
+}
+
+PafColor PointMap::getCurrentPointColor() const
+{
+    return getPointColor( cur );
 }
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -1639,6 +1644,17 @@ bool PointMap::read(ifstream& stream, int version )
       if (version >= VERSION_LAYERS_INTROD) {
          for (int k = 0; k < m_rows; k++) {
             m_points[j][k].read(stream,version,attr_count);
+
+            // check if occdistance of any pixel's bin is set, meaning that
+            // the isovist analysis was done
+            if(!m_hasIsovistAnalysis) {
+                for(int b = 0; b < 32; b++) {
+                   if(m_points[j][k].m_node && m_points[j][k].m_node->occdistance(b) > 0) {
+                       m_hasIsovistAnalysis = true;
+                       break;
+                   }
+                }
+            }
          }
       }
       else if (version >= VERSION_EXTRA_POINT_DATA_INTROD) {
@@ -2620,6 +2636,7 @@ bool PointMap::binDisplay(Communicator *comm)
 
 bool PointMap::analyseIsovist(Communicator *comm, MetaGraph& mgraph, bool simple_version)
 {
+    m_hasIsovistAnalysis = false;
    // note, BSP tree plays with comm counting...
    comm->CommPostMessage( Communicator::NUM_STEPS, 2 );
    comm->CommPostMessage( Communicator::CURRENT_STEP, 1 );
@@ -2682,7 +2699,7 @@ bool PointMap::analyseIsovist(Communicator *comm, MetaGraph& mgraph, bool simple
          }
       }
    }
-
+    m_hasIsovistAnalysis = true;
    return true;
 }
 
@@ -3074,12 +3091,13 @@ bool PointMap::analyseMetric(Communicator *comm, Options& options)
             // note that m_misc is used in a different manner to analyseGraph / PointDepth
             // here it marks the node as used in calculation only
 
-            pqvector<MetricTriple> search_list;
-            search_list.add(MetricTriple(0.0f,curs,NoPixel));
+            std::set<MetricTriple> search_list;
+            search_list.insert(MetricTriple(0.0f,curs,NoPixel));
             int level = 0;
             while (search_list.size()) {
-               MetricTriple here = search_list[0];
-               search_list.remove_at(0);
+               std::set<MetricTriple>::iterator it = search_list.begin();
+               MetricTriple here = *it;
+               search_list.erase(it);
                if (options.radius != -1.0 && (here.dist * m_spacing) > options.radius) {
                   break;
                }
@@ -3147,10 +3165,10 @@ bool PointMap::analyseMetricPointDepth(Communicator *comm)
    }
 
    // in order to calculate Penn angle, the MetricPair becomes a metric triple...
-   pqvector<MetricTriple> search_list; // contains root point
+   std::set<MetricTriple> search_list; // contains root point
 
    for (size_t k = 0; k < m_selection_set.size(); k++) {
-      search_list.add(MetricTriple(0.0f,m_selection_set[k],NoPixel));
+      search_list.insert(MetricTriple(0.0f,m_selection_set[k],NoPixel));
    }
 
    // note that m_misc is used in a different manner to analyseGraph / PointDepth
@@ -3158,8 +3176,9 @@ bool PointMap::analyseMetricPointDepth(Communicator *comm)
    int count = 0;
    int level = 0;
    while (search_list.size()) {
-      MetricTriple here = search_list[0];
-      search_list.remove_at(0);
+      std::set<MetricTriple>::iterator it = search_list.begin();
+      MetricTriple here = *it;
+      search_list.erase(it);
       Point& p = getPoint(here.pixel);
       // nb, the filled check is necessary as diagonals seem to be stored with 'gaps' left in
       if (p.filled() && p.m_misc != ~0) {
@@ -3263,13 +3282,14 @@ bool PointMap::analyseAngular(Communicator *comm, Options& options)
             // note that m_misc is used in a different manner to analyseGraph / PointDepth
             // here it marks the node as used in calculation only
 
-            pqvector<AngularTriple> search_list;
-            search_list.add(AngularTriple(0.0f,curs,NoPixel));
+            std::set<AngularTriple> search_list;
+            search_list.insert(AngularTriple(0.0f,curs,NoPixel));
             getPoint(curs).m_cumangle = 0.0f;
             int level = 0;
             while (search_list.size()) {
-               AngularTriple here = search_list[0];
-               search_list.remove_at(0);
+               std::set<AngularTriple>::iterator it = search_list.begin();
+               AngularTriple here = *it;
+               search_list.erase(it);
                if (options.radius != -1.0 && here.angle > options.radius) {
                   break;
                }
@@ -3329,10 +3349,10 @@ bool PointMap::analyseAngularPointDepth(Communicator *comm)
       getPoint(pix).m_cumangle = -1.0f;
    }
 
-   pqvector<AngularTriple> search_list; // contains root point
+   std::set<AngularTriple> search_list; // contains root point
 
    for (size_t k = 0; k < m_selection_set.size(); k++) {
-      search_list.add(AngularTriple(0.0f,m_selection_set[k],NoPixel));
+      search_list.insert(AngularTriple(0.0f,m_selection_set[k],NoPixel));
       getPoint(m_selection_set[k]).m_cumangle = 0.0f;
    }
 
@@ -3341,8 +3361,9 @@ bool PointMap::analyseAngularPointDepth(Communicator *comm)
    int count = 0;
    int level = 0;
    while (search_list.size()) {
-      AngularTriple here = search_list[0];
-      search_list.remove_at(0);
+      std::set<AngularTriple>::iterator it = search_list.begin();
+      AngularTriple here = *it;
+      search_list.erase(it);
       Point& p = getPoint(here.pixel);
       // nb, the filled check is necessary as diagonals seem to be stored with 'gaps' left in
       if (p.filled() && p.m_misc != ~0) {
