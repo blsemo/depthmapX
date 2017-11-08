@@ -26,14 +26,16 @@ public:
     const dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef> &m_table;
 
     // columnIndex < 0 -> not set
-    virtual void setDisplayColumn(int columnIndex);
-    int getDisplayColumn() const{ return m_displayColumn;}
+    virtual void setDisplayColIndex(int columnIndex);
+    int getDisplayColIndex() const{ return m_displayColumn;}
 
     float getNormalisedValue(const dXreimpl::SerialisedPixelRef& key, const dXreimpl::AttributeRow &row) const;
     const DisplayParams& getDisplayParams() const;
 
     typedef std::vector<dXreimpl::ConstAttributeIndexItem<dXreimpl::SerialisedPixelRef>> ConstIndex;
-    const ConstIndex& getConstIndex() const{return m_index;}
+    const ConstIndex& getConstTableIndex() const{return m_index;}
+
+    const dXreimpl::AttributeColumn& getDisplayedColumn() const;
 
 private:
     ConstIndex m_index;
@@ -45,8 +47,8 @@ class AttributeTableHandle : public AttributeTableView
 public:
     AttributeTableHandle(dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef> &table) : m_mutableTable(table), AttributeTableView(table){}
     typedef std::vector<dXreimpl::AttributeIndexItem<dXreimpl::SerialisedPixelRef>> Index;
-    const Index& getIndex() const {return m_mutableIndex;}
-    virtual void setDisplayColumn(int columnIndex);
+    const Index& getTableIndex() const {return m_mutableIndex;}
+    virtual void setDisplayColIndex(int columnIndex);
 private:
     dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef>& m_mutableTable;
     Index m_mutableIndex;

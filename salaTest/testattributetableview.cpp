@@ -26,21 +26,29 @@ TEST_CASE("Test Attribute view"){
     table.addRow(7).setValue(0,0.7f).setValue(1,1.7f);
 
     AttributeTableView view(table);
-    view.setDisplayColumn(0);
+    view.setDisplayColIndex(0);
 
-    REQUIRE(view.getConstIndex().front().key.value == 7);
+    REQUIRE(view.getConstTableIndex().front().key.value == 7);
 
-    REQUIRE(view.getNormalisedValue(view.getConstIndex().front().key, *view.getConstIndex().front().row) == Approx(0.0f));
+    REQUIRE(view.getNormalisedValue(view.getConstTableIndex().front().key, *view.getConstTableIndex().front().row) == Approx(0.0f));
 
     REQUIRE(&view.getDisplayParams() != &table.getDisplayParams());
     REQUIRE(&view.getDisplayParams() == &table.getColumn(0).getDisplayParams());
 
 
     table.addRow(3);
-    view.setDisplayColumn(-1);
+    view.setDisplayColIndex(-1);
     REQUIRE(view.getNormalisedValue(3, table.getRow(3)) == Approx(3.0/7));
+    REQUIRE(view.getConstTableIndex().size() == 3);
 
     REQUIRE(&table.getDisplayParams() == &view.getDisplayParams());
+
+    view.setDisplayColIndex(-2);
+    REQUIRE(view.getNormalisedValue(3, table.getRow(3)) == Approx(3.0/7));
+    REQUIRE(view.getConstTableIndex().empty());
+
+    REQUIRE(&table.getDisplayParams() == &view.getDisplayParams());
+
 }
 
 
@@ -55,14 +63,25 @@ TEST_CASE("Test attribute table handle")
     table.addRow(7).setValue(0,0.7f).setValue(1,1.7f);
 
     AttributeTableHandle handle(table);
-    handle.setDisplayColumn(0);
+    handle.setDisplayColIndex(0);
 
-    REQUIRE(handle.getIndex().front().key.value == 7);
-    REQUIRE(handle.getConstIndex().front().key.value == 7);
+    REQUIRE(handle.getTableIndex().front().key.value == 7);
+    REQUIRE(handle.getConstTableIndex().front().key.value == 7);
 
 
-    handle.getIndex().front().mutable_row->setValue(0, 0.8);
+    handle.getTableIndex().front().mutable_row->setValue(0, 0.8f);
 
     REQUIRE(table.getRow(7).getValue(0) == Approx(0.8));
+
+    handle.setDisplayColIndex(-1);
+    REQUIRE(handle.getTableIndex().size() == 2);
+
+    REQUIRE(&table.getDisplayParams() == &handle.getDisplayParams());
+
+    handle.setDisplayColIndex(-2);
+    REQUIRE(handle.getTableIndex().empty());
+
+    REQUIRE(&table.getDisplayParams() == &handle.getDisplayParams());
+
 
 }
