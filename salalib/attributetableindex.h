@@ -74,7 +74,7 @@ namespace dXreimpl
     }
 
     template<typename ItemType, typename TableType>
-    std::vector<ItemType> makeAttributeIndex(TableType &table, size_t colIndex)
+    std::vector<ItemType> makeAttributeIndex(TableType &table, int colIndex)
     {
         std::vector<ItemType> index;
         size_t numRows = table.getNumRows();
@@ -84,15 +84,34 @@ namespace dXreimpl
         }
         index.reserve(numRows);
         // perturb the values to be sorted by so same values will be in order of appearence in the map
-        double perturbationFactor = table.getColumn(colIndex).getStats().max * 1e-9 / numRows;
         size_t idx = 0;
-        for (auto & item : table)
+        if ( colIndex == -1 )
         {
-            double value = item.getRow().getValue(colIndex);
-            value += idx * perturbationFactor;
+            double perturbationFactor = 1e-9 / numRows;
+            for (auto& item: table)
+            {
+                double value = (double)item.getKey().value;
+                value += idx * perturbationFactor;
 
-            index.push_back(ItemType(item.getKey(), value, item.getRow()));
-            ++idx;
+                index.push_back(ItemType(item.getKey(), value, item.getRow()));
+                ++idx;
+            }
+        }
+        else if (colIndex >= 0 )
+        {
+            double perturbationFactor = table.getColumn(colIndex).getStats().max * 1e-9 / numRows;
+            for (auto & item : table)
+            {
+                double value = item.getRow().getValue(colIndex);
+                value += idx * perturbationFactor;
+
+                index.push_back(ItemType(item.getKey(), value, item.getRow()));
+                ++idx;
+            }
+        }
+        else
+        {
+            throw std::out_of_range("Column index out of range");
         }
         std::sort(index.begin(), index.end());
         return index;

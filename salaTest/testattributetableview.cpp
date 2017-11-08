@@ -39,8 +39,16 @@ TEST_CASE("Test Attribute view"){
     table.addRow(3);
     view.setDisplayColIndex(-1);
     REQUIRE(view.getNormalisedValue(3, table.getRow(3)) == Approx(3.0/7));
+    REQUIRE(view.getConstTableIndex().size() == 3);
 
     REQUIRE(&table.getDisplayParams() == &view.getDisplayParams());
+
+    view.setDisplayColIndex(-2);
+    REQUIRE(view.getNormalisedValue(3, table.getRow(3)) == Approx(3.0/7));
+    REQUIRE(view.getConstTableIndex().empty());
+
+    REQUIRE(&table.getDisplayParams() == &view.getDisplayParams());
+
 }
 
 
@@ -64,5 +72,16 @@ TEST_CASE("Test attribute table handle")
     handle.getTableIndex().front().mutable_row->setValue(0, 0.8f);
 
     REQUIRE(table.getRow(7).getValue(0) == Approx(0.8));
+
+    handle.setDisplayColIndex(-1);
+    REQUIRE(handle.getTableIndex().size() == 2);
+
+    REQUIRE(&table.getDisplayParams() == &handle.getDisplayParams());
+
+    handle.setDisplayColIndex(-2);
+    REQUIRE(handle.getTableIndex().empty());
+
+    REQUIRE(&table.getDisplayParams() == &handle.getDisplayParams());
+
 
 }

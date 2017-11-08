@@ -19,9 +19,9 @@ AttributeTableView::AttributeTableView(const dXreimpl::AttributeTable<dXreimpl::
 {}
 
 void AttributeTableView::setDisplayColIndex(int columnIndex){
-    if (columnIndex < 0)
+    if (columnIndex < -1)
     {
-        m_displayColumn = -1;
+        m_displayColumn = -2;
         m_index.clear();
         return;
     }
@@ -51,7 +51,7 @@ const DisplayParams &AttributeTableView::getDisplayParams() const
 }
 
 void AttributeTableHandle::setDisplayColIndex(int columnIndex){
-    if (columnIndex < 0)
+    if (columnIndex < -1)
     {
         m_mutableIndex.clear();
     }
