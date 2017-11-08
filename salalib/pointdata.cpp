@@ -241,7 +241,7 @@ PointMap::~PointMap()
    }
 }
 
-PointMap::PointMap(const PointMap& pointdata)
+PointMap::PointMap(const PointMap& pointdata) : m_attributeView(m_attributes)
 {
    construct(pointdata);
 }
@@ -2759,7 +2759,7 @@ bool PointMap::analyseVisualPointDepth(Communicator *comm)
                if (!p.m_merge.empty()) {
                   Point& p2 = getPoint(p.m_merge);
                   if (p2.m_misc != ~0) {
-                     m_attributes.getRow(p.m_merge).setValue(row,col,float(level));
+                     m_attributes.getRow(p.m_merge).setValue(col,float(level));
                      p2.m_node->extractUnseen(search_tree[level+1],this,p2.m_misc); // did say p.misc
                      p2.m_misc = ~0;
                   }
@@ -3218,10 +3218,10 @@ bool PointMap::analyseThruVision(Communicator *comm)
                PixelRefList pixels = quickPixelateLine(x,curs);
                for (size_t k = 1; k < pixels.size() - 1; k++) {
                   getPoint(pixels[k]).m_misc += 1;
-                  int index = m_attributes.getRowid(pixels[k]);
-                  int gate = (index != -1) ? (int)m_attributes.getValue(index,g_col_gate) : -1;
+                  auto* row = m_attributes.getRowPtr(pixels[k]);
+                  int gate = (row != 0) ? (int)row->getValue(g_col_gate) : -1;
                   if (gate != -1 && seengates.searchindex(gate) == paftl::npos) {
-                     m_attributes.incrValue(index, g_col_gate_counts);
+                     row->incrValue(g_col_gate_counts) ;
                      seengates.add(gate,paftl::ADD_HERE);
                   }
                }
@@ -3241,11 +3241,11 @@ bool PointMap::analyseThruVision(Communicator *comm)
       }
    }
 
-   int col = m_attributes.insertColumn("Through vision");
+   int col = m_attributes.insertOrResetColumn("Through vision");
 
-   for (i = 0; i < m_attributes.getRowCount(); i++) {
-      PixelRef curs = m_attributes.getRowKey(i);
-      m_attributes.setValue(i,col,(float)getPoint(curs).m_misc);
+   for (auto &row : m_attributes) {
+      PixelRef curs = row.getKey().value;
+      row.setValue(col,(float)getPoint(curs).m_misc);
       getPoint(curs).m_misc = 0;
    }
 
@@ -3812,15 +3812,8 @@ double PointMap::getLocationValue(const Point2f& point)
       return val;
    }
 
-   int index = m_attributes.getRowid(pix);
-   if (index == -1) {
-      val = -2;
-   }
-   else {
-      val = m_attributes.getValue(index,m_displayed_attribute);
-   }
-
-   return val;
+   auto* row = m_attributes.getRowPtr(pix);
+   return row != 0 ? row->getValue(m_displayed_attribute) : -2;
 }
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -3828,8 +3821,8 @@ double PointMap::getLocationValue(const Point2f& point)
 
 void PointMap::addGridConnections()
 {
-   for (int i = 0; i < m_attributes.getRowCount(); i++) {
-      PixelRef curs = m_attributes.getRowKey(i);
+   for (auto& row : m_attributes) {
+      PixelRef curs = row.getKey().value;
       PixelRef node = curs.right();
       Point& point = getPoint(curs);
       point.m_grid_connections = 0;
