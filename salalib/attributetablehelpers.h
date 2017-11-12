@@ -103,9 +103,6 @@ namespace dXreimpl{
         return table.getColumn(column).getStats().total / (double)table.getNumRows();
     }
 
-<<<<<<< HEAD
-
-=======
     inline double getSelAverage(const AttributeColumnStats& stats)
     {
         if (stats.numSelected == 0)
@@ -114,6 +111,4 @@ namespace dXreimpl{
         }
         return stats.selectedTotal / stats.numSelected;
     }
->>>>>>> 80181cfa2526a714706d6fb040be3bcd0429bfdc
-
 }
