@@ -316,7 +316,7 @@ public:
    float getSelAvg()
    {
       if (m_view_class & VIEWVGA)
-         return (float)getDisplayedPointMap().getAttributeView().getDisplayedColumn().getStats().;
+          return (float)getDisplayedPointMap().getAttributeTable().getSelAvg();
       else if (m_view_class & VIEWAXIAL) 
          return (float)m_shape_graphs.getDisplayedMap().getAttributeTable().getSelAvg();
       else if (m_view_class & VIEWDATA) 
