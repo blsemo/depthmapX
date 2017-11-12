@@ -48,4 +48,13 @@ namespace dXreimpl{
 
     }
 
+    inline double getSelAverage(const AttributeColumnStats& stats)
+    {
+        if (stats.numSelected == 0)
+        {
+            return 0.0;
+        }
+        return stats.selectedTotal / stats.numSelected;
+    }
+
 }

@@ -16,6 +16,7 @@
 #include "catch.hpp"
 #include "Catch/fakeit.hpp"
 #include <salalib/attributetable.h>
+#include <salalib/attributetablehelpers.h>
 #include <cliTest/selfcleaningfile.h>
 #include <fstream>
 #include <salalib/mgraph_consts.h>
@@ -95,6 +96,35 @@ TEST_CASE("test attribute column")
 
 }
 
+TEST_CASE("attribute column - test selected stats")
+{
+    using namespace dXreimpl;
+    AttributeColumnImpl col("colName");
+    REQUIRE(col.getStats().selectedTotal == 0.0);
+    REQUIRE(col.getStats().numSelected == 0);
+    REQUIRE(getSelAverage(col.getStats()) == 0.0);
+
+    col.addSelection(-1.0);
+    REQUIRE(col.getStats().selectedTotal == 0.0);
+    REQUIRE(col.getStats().numSelected == 1);
+    REQUIRE(getSelAverage(col.getStats()) == 0.0);
+
+    col.addSelection(1.0);
+    REQUIRE(col.getStats().selectedTotal == 1.0);
+    REQUIRE(col.getStats().numSelected == 2);
+    REQUIRE(getSelAverage(col.getStats()) == Approx(0.5));
+
+    col.removeSelection(-1.0);
+    REQUIRE(col.getStats().selectedTotal == 1.0);
+    REQUIRE(col.getStats().numSelected == 1);
+    REQUIRE(getSelAverage(col.getStats()) == Approx(1.0));
+
+    col.resetSelection();
+    REQUIRE(col.getStats().selectedTotal == 0.0);
+    REQUIRE(col.getStats().numSelected == 0);
+    REQUIRE(getSelAverage(col.getStats()) == 0.0);
+}
+
 TEST_CASE("test attribute row")
 {
     using namespace dXreimpl;
@@ -127,9 +157,9 @@ TEST_CASE("test attribute row")
     REQUIRE(row.getValue(1) == Approx(3.2f));
 
 
-    Verify(Method(col1,updateStats).Using(1.2f,0.0f)).Once();
-    Verify(Method(col2,updateStats).Using(2.2f,0.0f)).Once();
-    Verify(Method(col2,updateStats).Using(3.2f,2.2f)).Once();
+    Verify(Method(col1,updateStats).Using(1.2f,0.0f,false)).Once();
+    Verify(Method(col2,updateStats).Using(2.2f,0.0f,false)).Once();
+    Verify(Method(col2,updateStats).Using(3.2f,2.2f,false)).Once();
 
     REQUIRE_THROWS_AS(row.setValue("colx", 1.1f), std::out_of_range);
     REQUIRE_THROWS_AS(row.setValue(2, 1.2f), std::out_of_range);
@@ -165,12 +195,12 @@ TEST_CASE("test attribute row")
 
     row.incrValue(0, 1.0f);
     REQUIRE(row.getValue(0) == Approx(2.2f));
-    Verify(Method(col1,updateStats).Using(2.2f,1.2f)).Once();
+    Verify(Method(col1,updateStats).Using(2.2f,1.2f,false)).Once();
 
     AttributeRow& ifRef = row;
     ifRef.incrValue(0);
     REQUIRE(row.getValue(0) == Approx(3.2f));
-    Verify(Method(col1,updateStats).Using(3.2f,2.2f)).Once();
+    Verify(Method(col1,updateStats).Using(3.2f,2.2f,false)).Once();
 
 
 }
@@ -399,6 +429,85 @@ TEST_CASE("attibute table iterations")
     REQUIRE(table.getRow(1).getValue(1) == Approx(3.2));
 }
 
+
+TEST_CASE("Test attribute table selection stats")
+{
+    using namespace dXreimpl;
+    AttributeTable<SerialisedPixelRef> table;
+
+    table.insertOrResetColumn("col1");
+    table.getOrInsertColumn("col2");
+
+    auto& row = table.addRow(SerialisedPixelRef(0));
+    row.setValue(0, 0.5f);
+    auto& row2 = table.addRow(SerialisedPixelRef(1));
+    row2.setValue(0, 1.0f);
+
+    auto &stats1 = table.getColumn(0).getStats();
+    auto &stats2 = table.getColumn(1).getStats();
+
+    REQUIRE(stats1.numSelected == 0);
+    REQUIRE(stats1.selectedTotal == 0.0);
+    REQUIRE(stats2.numSelected == 0);
+    REQUIRE(stats2.selectedTotal == 0.0);
+
+    row.setSelection(true);
+    REQUIRE(stats1.numSelected == 1);
+    REQUIRE(stats1.selectedTotal == Approx(0.5));
+    REQUIRE(stats2.numSelected == 1);
+    REQUIRE(stats2.selectedTotal == 0.0);
+    row.setSelection(true);
+
+    row.setSelection(true);
+    REQUIRE(stats1.numSelected == 1);
+    REQUIRE(stats1.selectedTotal == Approx(0.5));
+    REQUIRE(stats2.numSelected == 1);
+    REQUIRE(stats2.selectedTotal == 0.0);
+
+    row2.setSelection(true);
+    REQUIRE(stats1.numSelected == 2);
+    REQUIRE(stats1.selectedTotal == Approx(1.5));
+    REQUIRE(stats2.numSelected == 2);
+    REQUIRE(stats2.selectedTotal == 0.0);
+
+    row2.setSelection(false);
+    REQUIRE(stats1.numSelected == 1);
+    REQUIRE(stats1.selectedTotal == Approx(0.5));
+    REQUIRE(stats2.numSelected == 1);
+    REQUIRE(stats2.selectedTotal == 0.0);
+
+    row.setValue(1,3.0);
+    REQUIRE(stats1.numSelected == 1);
+    REQUIRE(stats1.selectedTotal == Approx(0.5));
+    REQUIRE(stats2.numSelected == 1);
+    REQUIRE(stats2.selectedTotal == Approx(3.0));
+
+    row2.setValue(1,4.0);
+    REQUIRE(stats1.numSelected == 1);
+    REQUIRE(stats1.selectedTotal == Approx(0.5));
+    REQUIRE(stats2.numSelected == 1);
+    REQUIRE(stats2.selectedTotal == Approx(3.0));
+
+    row.setValue(1,2.0);
+    REQUIRE(stats1.numSelected == 1);
+    REQUIRE(stats1.selectedTotal == Approx(0.5));
+    REQUIRE(stats2.numSelected == 1);
+    REQUIRE(stats2.selectedTotal == Approx(2.0));
+
+    table.deselectAllRows();
+
+    REQUIRE(stats1.numSelected == 0);
+    REQUIRE(stats1.selectedTotal == 0.0);
+    REQUIRE(stats2.numSelected == 0);
+    REQUIRE(stats2.selectedTotal == 0.0);
+
+
+}
+
+
+//===========================================================
+// binary compatibility tests below here - any purely new functionality needs to be tested above this line
+
 #include "salalib/attributes.h"
 #include <salalib/attributetablehelpers.h>
 
@@ -539,7 +648,5 @@ TEST_CASE("Attribute Table - serialisation")
     REQUIRE(roundTripTable.getColumn(colIndex1).getDisplayParams().blue == Approx(fooDp.blue));
     // the overall display params have gone AWOL in the old implementation :-/
     REQUIRE(roundTripTable.getDisplayParams().blue == Approx(fooDp.blue));
-
-
 }
 

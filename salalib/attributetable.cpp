@@ -57,7 +57,7 @@ const dXreimpl::AttributeColumnStats &dXreimpl::AttributeColumnImpl::getStats() 
     return m_stats;
 }
 
-void dXreimpl::AttributeColumnImpl::updateStats(float val, float oldVal) const
+void dXreimpl::AttributeColumnImpl::updateStats(float val, float oldVal, bool isSelected) const
 {
     if (m_stats.total < 0)
     {
@@ -76,6 +76,34 @@ void dXreimpl::AttributeColumnImpl::updateStats(float val, float oldVal) const
     {
         m_stats.min = val;
     }
+    if (isSelected)
+    {
+        m_stats.selectedTotal += val - oldVal;
+    }
+}
+
+void dXreimpl::AttributeColumnImpl::addSelection(float val) const
+{
+    if ( val > 0.0)
+    {
+        m_stats.selectedTotal += val;
+    }
+    ++m_stats.numSelected;
+}
+
+void dXreimpl::AttributeColumnImpl::removeSelection(float val) const
+{
+    if ( val > 0.0)
+    {
+        m_stats.selectedTotal -= val;
+    }
+    --m_stats.numSelected;
+}
+
+void dXreimpl::AttributeColumnImpl::resetSelection() const
+{
+    m_stats.selectedTotal = 0.0;
+    m_stats.numSelected = 0;
 }
 
 void dXreimpl::AttributeColumnImpl::setName(const std::string &name)
@@ -182,12 +210,28 @@ dXreimpl::AttributeRow& dXreimpl::AttributeRowImpl::setValue(size_t index, float
     {
         oldVal = 0.0f;
     }
-    m_colManager.getColumn(index).updateStats(value, oldVal);
+    m_colManager.getColumn(index).updateStats(value, oldVal, m_selected);
     return *this;
 }
 
 dXreimpl::AttributeRow& dXreimpl::AttributeRowImpl::setSelection(bool selected)
 {
+    if ( !m_selected && selected )
+    {
+        //new selection
+        for (size_t i = 0; i < m_data.size(); ++i)
+        {
+            m_colManager.getColumn(i).addSelection(m_data[i]);
+        }
+    }
+    else if (m_selected && !selected)
+    {
+        //uselect
+        for (size_t i = 0; i < m_data.size(); ++i)
+        {
+            m_colManager.getColumn(i).removeSelection(m_data[i]);
+        }
+    }
     m_selected = selected;
     return *this;
 }

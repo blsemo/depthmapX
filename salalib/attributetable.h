@@ -53,7 +53,8 @@ namespace dXreimpl
     ///
     struct AttributeColumnStats
     {
-        AttributeColumnStats( double minimum, double maximum, double tot, double vTot, double vMin, double vMax ): min(minimum), max(maximum), total(tot), visibleTotal(vTot), visibleMin(vMin), visibleMax(vMax)
+        AttributeColumnStats( double minimum, double maximum, double tot, double vTot, double vMin, double vMax )
+            : min(minimum), max(maximum), total(tot), visibleTotal(vTot), visibleMin(vMin), visibleMax(vMax), selectedTotal(0.0), numSelected(0)
         {}
 
         AttributeColumnStats() : AttributeColumnStats(-1.0, -1.0, -1.0, -1.0, -1.0, -1.0)
@@ -66,6 +67,8 @@ namespace dXreimpl
         double visibleTotal;
         double visibleMin;
         double visibleMax;
+        double selectedTotal;
+        size_t numSelected;
     };
 
 
@@ -89,10 +92,12 @@ namespace dXreimpl
 
         // stats are mutable - we need to be able to update them all the time,
         // even when not allowed to modify the column settings
-        virtual void updateStats(float val, float oldVal = 0.0f) const = 0;
+        virtual void updateStats(float val, float oldVal = 0.0f, bool isSelected = false) const = 0;
+        virtual void addSelection(float val) const = 0;
+        virtual void removeSelection(float val) const = 0;
+        virtual void resetSelection() const = 0;
 
         virtual ~AttributeColumn(){}
-
     };
 
 
@@ -114,7 +119,7 @@ namespace dXreimpl
 
     // Implementation of AttributeColumn
 
-    class AttributeColumnImpl: public AttributeColumn, AttributeColumnStats
+    class AttributeColumnImpl: public AttributeColumn
     {
         // AttributeColumn interface
     public:
@@ -134,7 +139,10 @@ namespace dXreimpl
         virtual void setDisplayParams(const DisplayParams &params){ m_displayParams = params; }
         virtual const DisplayParams &getDisplayParams() const{return m_displayParams;}
 
-        virtual void updateStats(float val, float oldVal = 0.0f) const;
+        virtual void updateStats(float val, float oldVal = 0.0f, bool isSelected = false) const;
+        virtual void addSelection(float val) const;
+        virtual void removeSelection(float val) const;
+        virtual void resetSelection() const;
 
     public:
         // stats are mutable - we need to be able to update them all the time,
@@ -590,6 +598,10 @@ namespace dXreimpl
         for (auto& row : m_rows)
         {
             row.second->setSelection(false);
+        }
+        for (auto& col : m_columns)
+        {
+            col.resetSelection();
         }
     }
 
