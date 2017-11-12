@@ -1901,9 +1901,8 @@ int MetaGraph::convertDataLayersToShapeMap(DataLayers& datalayers, PointMap& poi
       ShapeMap& shapemap = m_data_maps.getMap(conversion_lookup.value(i));
       int layer_ref = datalayers.getLayerRef(conversion_lookup.key(i));
       pvecint *shape_pixel_lists = new pvecint [datalayers[i].getObjectCount()];
-      int j;
-      for (j = 0; j < pointmap.getAttributeTable().getRowCount(); j++) {
-         PixelRef pix = pointmap.getAttributeTable().getRowKey(j);
+      for (auto& row : getAttributeTable()) {
+         PixelRef pix = row.getKey().value;
          int z = pointmap.getPoint(pix).getDataObject(layer_ref);
          if (z != -1) {
             shape_pixel_lists[z].push_back(pix);
@@ -1911,6 +1910,7 @@ int MetaGraph::convertDataLayersToShapeMap(DataLayers& datalayers, PointMap& poi
       }
       // add shapes:
       pvecint row_lookup;
+      int j;
       for (j = 0; j < datalayers[i].getObjectCount(); j++) {
          for (size_t k = 0; k < shape_pixel_lists[j].size(); k++) {
             pointmap.overrideSelPixel(shape_pixel_lists[j][k]);

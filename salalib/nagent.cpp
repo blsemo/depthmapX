@@ -87,8 +87,8 @@ void AgentEngine::run(Communicator *comm, PointMap *pointmap)
       comm->CommPostMessage( Communicator::NUM_RECORDS, m_timesteps );
    }
    
-   AttributeTable& table = pointmap->getAttributeTable();
-   int displaycol = table.insertColumn(g_col_total_counts);
+   auto& table = pointmap->getAttributeTable();
+   int displaycol = table.insertOrResetColumn(g_col_total_counts);
 
    int output_mode = Agent::OUTPUT_COUNTS;
    if (m_gatelayer != -1) {
@@ -604,8 +604,8 @@ void Agent::onInit(PixelRef node, int trail_num)
    m_node = node;
    m_loc = m_pointmap->depixelate(m_node);
    if (m_output_mode & OUTPUT_GATE_COUNTS) {
-      int index = m_pointmap->getAttributeTable().getRowid(m_node);
-      m_gate = (index != -1) ? (int)m_pointmap->getAttributeTable().getValue(index,g_col_gate) : -1;
+      auto* row = m_pointmap->getAttributeTable().getRowPtr(m_node);
+      m_gate = (row != 0) ? (int)row->getValue(g_col_gate) : -1;
    }
    else {
       m_gate = -1;
@@ -665,17 +665,17 @@ void Agent::onMove()
    PixelRef lastnode = m_node;
    onStep();
    if (m_node != lastnode && m_output_mode != OUTPUT_NOTHING) {
-      int index = m_pointmap->getAttributeTable().getRowid(m_node);
-      if (index != -1) {
+      auto* row = m_pointmap->getAttributeTable().getRowPtr(m_node);
+      if (row != 0) {
          if (m_output_mode & OUTPUT_COUNTS) {
-            m_pointmap->getAttributeTable().incrValue(index, g_col_total_counts);
+            row->incrValue(g_col_total_counts);
          }
          if (m_output_mode & OUTPUT_GATE_COUNTS) {
-            int obj = (int)m_pointmap->getAttributeTable().getValue(index, g_col_gate);
+            int obj = (int)row->getValue(g_col_gate);
             if (m_gate != obj) {
                m_gate = obj;
                if (m_gate != -1) {
-                  m_pointmap->getAttributeTable().incrValue(index, g_col_gate_counts);
+                  row->incrValue(g_col_gate_counts);
                   // actually crossed into a new gate:
                   m_gate_encountered = true;
                }
