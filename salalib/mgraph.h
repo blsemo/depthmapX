@@ -323,9 +323,9 @@ public:
       if (m_view_class & VIEWVGA)
           return (float)dXreimpl::getSelAverage(getDisplayedPointMap().getAttributeView().getDisplayedColumn().getStats());
       else if (m_view_class & VIEWAXIAL) 
-         return (float)m_shape_graphs.getDisplayedMap().getAttributeTable().getSelAvg();
+         return (float)dXreimpl::getSelAverage(m_shape_graphs.getDisplayedMap().getAttributeView().getDisplayedColumn().getStats());
       else if (m_view_class & VIEWDATA) 
-         return (float)m_data_maps.getDisplayedMap().getAttributeTable().getSelAvg();
+         return (float)dXreimpl::getSelAverage(m_data_maps.getDisplayedMap().getAttributeView().getDisplayedColumn().getStats());
       else
          return -1.0f;
    }

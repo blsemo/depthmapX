@@ -1336,8 +1336,8 @@ int ShapeGraphs::convertDrawingToAxial(Communicator *comm, const std::string& na
 
    // record origin layer only if more than one layer:
    if (recordlayer) {
-      AttributeTable& table = usermap.getAttributeTable();
-      int col = table.insertColumn("Drawing Layer");
+      auto& table = usermap.getAttributeTable();
+      int col = table.insertOrResetColumn("Drawing Layer");
       for (size_t k = 0; k < lines.size(); k++) {
          table.setValue(k,col,float(layers.search(lines.key(k))));
       }

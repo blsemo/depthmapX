@@ -26,6 +26,10 @@
 #include <string>
 #include "salalib/importtypedefs.h"
 #include "genlib/bspnode.h"
+#include "attributetable.h"
+#include "layermanagerimpl.h"
+#include "attributetableview.h"
+#include "attributetablehelpers.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -218,7 +222,9 @@ protected:
    //
    prefvec<SalaEvent> m_undobuffer;
    //
-   AttributeTable m_attributes;
+   dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef> m_attributes;
+   AttributeTableHandle m_attributeView;
+   LayerManagerImpl m_layerManager;
    //
    // for graph functionality
    // Note: this list is stored PACKED for optimal performance on graph analysis
@@ -365,41 +371,50 @@ public:
    const std::string& getName() const
       { return m_name; }
    int addAttribute(const std::string& name)
-      { return m_attributes.insertColumn(name); }
+      { return m_attributes.insertOrResetColumn(name); }
    void removeAttribute(int col)
       { m_attributes.removeColumn(col); }
    void setAttribute(int obj, const std::string& name, float val)
-      { m_attributes.setValue(m_attributes.getRowid(obj),name,val); }
+      { m_attributes.getRow(obj).setValue(name,val); }
    void incrementAttribute(int obj, const std::string& name)
-      { m_attributes.incrValue(m_attributes.getRowid(obj),name); }
+      { m_attributes.getRow(obj).incrValue(name); }
    // I don't want to do this, but every so often you will need to update this table 
    // use const version by preference
-   AttributeTable& getAttributeTable()
+   dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef>& getAttributeTable()
       { return m_attributes; }
-   const AttributeTable& getAttributeTable() const
+   const dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef>& getAttributeTable() const
       { return m_attributes; }
+   AttributeTableHandle &getAttributeView()
+   {
+       return m_attributeView;
+   }
+   const AttributeTableView& getAttributeView() const
+   {
+       return m_attributeView;
+   }
+
 public:
    // layer functionality
    bool isLayerVisible(int layerid) const
-   { return m_attributes.isLayerVisible(layerid); }
+   { return m_layerManager.isLayerVisible(layerid); }
    void setLayerVisible(int layerid, bool show)
-   { m_attributes.setLayerVisible(layerid,show); }
+   { m_layerManager.setLayerVisible(layerid,show); }
    bool selectionToLayer(const std::string& name = std::string("Unnamed"));
 public:
    double getDisplayMinValue() const
-   { return (m_displayed_attribute != -1) ? m_attributes.getMinValue(m_displayed_attribute) : 0; } 
+   { return (m_displayed_attribute != -1) ? m_attributes.getColumn(m_displayed_attribute).getStats().min : 0; }
    double getDisplayMaxValue() const
-   { return (m_displayed_attribute != -1) ? m_attributes.getMaxValue(m_displayed_attribute) : m_shape_ref; } 
+   { return (m_displayed_attribute != -1) ? m_attributes.getColumn(m_displayed_attribute).getStats().max : m_shape_ref; }
    //
    mutable DisplayParams m_display_params;
    const DisplayParams& getDisplayParams() const
-   { return m_attributes.getDisplayParams(m_displayed_attribute); } 
+   { return m_attributes.getColumn(m_displayed_attribute).getDisplayParams(); }
    // make a local copy of the display params for access speed:
    void setDisplayParams(const DisplayParams& dp, bool apply_to_all = false)
    { if (apply_to_all)
         m_attributes.setDisplayParams(dp); 
      else 
-        m_attributes.setDisplayParams(m_displayed_attribute, dp); 
+        m_attributes.getColumn(m_displayed_attribute).setDisplayParams(dp);
      m_display_params = dp; }
    //
    mutable bool m_show_lines;
@@ -418,10 +433,10 @@ public:
    // now, there is a slightly odd thing here: the displayed attribute can go out of step with the underlying 
    // attribute data if there is a delete of an attribute in idepthmap.h, so it just needs checking before returning!
    int getDisplayedAttribute() const
-   { if (m_displayed_attribute == m_attributes.m_display_column) return m_displayed_attribute;
-     if (m_attributes.m_display_column != -2) {
-         m_displayed_attribute = m_attributes.m_display_column;
-         m_display_params = m_attributes.getDisplayParams(m_displayed_attribute);
+   { if (m_displayed_attribute == m_attributeView.getDisplayColIndex()) return m_displayed_attribute;
+     if (m_attributeView.getDisplayColIndex() != -2) {
+         m_displayed_attribute = m_attributeView.getDisplayColIndex();
+         m_display_params = m_attributeView.getDisplayParams();
       }
       return m_displayed_attribute; }
    //
@@ -472,7 +487,7 @@ public:
    bool findNextShape(bool& nextlayer) const;
    const SalaShape& getNextShape() const;
    const PafColor getShapeColor() const
-   { return m_attributes.getDisplayColor(m_display_shapes[m_current]); }
+   { return dXreimpl::getDisplayColor(m_display_shapes[m_current], m_attributeView); }
    bool getShapeSelected() const
    { return m_shapes[m_display_shapes[m_current]].m_selected; }
    //
