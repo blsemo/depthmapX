@@ -353,14 +353,21 @@ public:
       { m_attributes.removeColumn(col); }
    void setAttribute(PixelRef pix, const std::string& name, float val)
       { m_attributes.getRow(pix.toInt()).setValue(name,val); }
-//   void incrementAttribute(PixelRef pix, const std::string& name)
-//      { m_attributes.incrValue(m_attributes.getRowid(pix),name); }
    // I don't want to do this, but every so often you will need to update this table 
    // use const version by preference
-   AttributeTable& getAttributeTable()
+   dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef>& getAttributeTable()
       { return m_attributes; }
-   const AttributeTable& getAttributeTable() const
+   const dXreimpl::AttributeTable<dXreimpl::SerialisedPixelRef>& getAttributeTable() const
       { return m_attributes; }
+   AttributeTableHandle& getAttributeView()
+   {
+       return m_attributeView;
+   }
+   const AttributeTableView& getAttributeView() const
+   {
+       return m_attributeView;
+   }
+
 public:
    double getDisplayMinValue() const
    { return (m_displayed_attribute != -1) ? m_attributes.getColumn(m_displayed_attribute).getStats().min : 0; }
@@ -394,9 +401,9 @@ public:
    // now, there is a slightly odd thing here: the displayed attribute can go out of step with the underlying
    // attribute data if there is a delete of an attribute in idepthmap.h, so it just needs checking before returning!
    int getDisplayedAttribute() const
-   { if (m_displayed_attribute == m_attributeView.getDisplayColumn()) return m_displayed_attribute;
-     if (m_attributeView.getDisplayColumn() != -2) {
-        m_displayed_attribute = m_attributeView.getDisplayColumn();
+   { if (m_displayed_attribute == m_attributeView.getDisplayColIndex()) return m_displayed_attribute;
+     if (m_attributeView.getDisplayColIndex() != -2) {
+        m_displayed_attribute = m_attributeView.getDisplayColIndex();
         m_display_params = m_attributeView.getDisplayParams();
      }
      return m_displayed_attribute; }

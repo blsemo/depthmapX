@@ -100,7 +100,9 @@ namespace dXreimpl{
         {
             return 0.0;
         }
-        return table.getColumn(column).getStats().total / (double)table.getNumRows()
+        return table.getColumn(column).getStats().total / (double)table.getNumRows();
     }
+
+
 
 }
