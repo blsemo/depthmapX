@@ -15,7 +15,6 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-
 // This is my code to make a set of axial lines from a set of boundary lines
 
 #include <math.h>
@@ -25,12 +24,16 @@
 #include <genlib/comm.h> // for communicator
 #include <genlib/stringutils.h>
 #include <genlib/exceptions.h>
+#include <genlib/legacyconverters.h>
 
 #include <salalib/mgraph.h> // purely for the version info --- as phased out should replace
 #include <salalib/shapemap.h>
 
+#include <stdexcept>
 // for mapinfo interface
 #include "MapInfoData.h"
+
+#include <unordered_map>
 
 #ifndef _WIN32
 #define _finite finite
@@ -417,7 +420,7 @@ int ShapeMap::makeLineShape(const Line& line, bool through_ui, bool tempshape)
    return m_shape_ref;
 }
 
-int ShapeMap::makePolyShape(const pvecpoint& points, bool open, bool tempshape)
+int ShapeMap::makePolyShape(const pqvector<Point2f>& points, bool open, bool tempshape)
 {
    bool bounds_good = true;
 
@@ -2872,218 +2875,120 @@ bool ShapeMap::output( ofstream& stream, char delimiter, bool updated_only )
    return true;
 }
 
-// simple text file to a data map
-// to start with, we'll just use fixed format:
-// tab delimited -- x1,y1,x2,y2 implies line data
-//                  x,y implies point data
-
-bool ShapeMap::importTxt(istream& stream, bool csv)
+bool ShapeMap::importPoints(const std::vector<Point2f> &points,
+                            const depthmapX::Table &data)
 {
-   std::string inputline;
-   stream >> inputline;
-   
-   // if not known to be csv or tab delimited, try both:
-   if (!csv) {
-      size_t n = inputline.find_first_of('\t');
-      // if can't find tabs, then try commas:
-      if (n == std::string::npos) {
-         n = inputline.find_first_of(',');
-         if (n == std::string::npos) {
-            // neither tabs nor commas
-            return false;
-         }
-         else {
-            // found commas
-            csv = true;
-         }
-      }
-   }
+    //assumes that points and data come in the same order
 
-   // check for a tab delimited header line...
-   auto strings = dXstring::split(inputline, csv ? ',' : '\t');
-   if (strings.size() < 2) {
-      return false;
-   }
+    std::vector<int> indices;
 
-   size_t i;
-   for (i = 0; i < strings.size(); i++) {
-      if (!strings[i].empty()) {
-         dXstring::toLower(strings[i]);
-         dXstring::ltrim(strings[i],'\"');
-         dXstring::rtrim(strings[i],'\"');
-      }
-   }
+    for(auto& point: points) {
+        indices.push_back(makePointShape(point));
+    }
 
-   int xcol = -1, ycol = -1, x1col = -1, y1col = -1, x2col = -1, y2col = -1;
-   for (i = 0; i < strings.size(); i++) {
-      if (strings[i] == "x" || strings[i] == "easting")
-         xcol = i;
-      else if (strings[i] == "y" || strings[i] == "northing")
-         ycol = i;
-      else if (strings[i] == "x1")
-         x1col = i;
-      else if (strings[i] == "x2")
-         x2col = i;
-      else if (strings[i] == "y1")
-         y1col = i;
-      else if (strings[i] == "y2")
-         y2col = i;
-      else {
-         std::replace(strings[i].begin(), strings[i].end(), '_',' ');
-         dXstring::makeInitCaps(strings[i]);
-         if (strings[i].empty() || m_attributes.insertColumn(strings[i]) == -1) {
-            // error adding column (e.g., duplicate column names)
-            return false;
-         }
-      }
-   }
+    bool dataImported = importData(data, indices);
 
-   // Quick mod - TV
-   unsigned int cols = strings.size();
+    invalidateDisplayedAttribute();
+    setDisplayedAttribute(-1);
 
-   bool pts = (xcol != -1 && ycol != -1);
-   bool lns = (x1col != -1 && y1col != -1 && x2col != -1 && y2col != -1);
-
-   if (!pts && !lns) {
-      return false;
-   }
-
-   // note, these have been ordered alphabetically by the attribute table, so we need to find out what they are now:
-   pvecint colmap;
-   prefvec<pqmap<std::string,size_t> > colcodes;
-   for (i = 0; i < strings.size(); i++) {
-      if (i != xcol && i != ycol && i != x1col && i != y1col && i != x2col && i != y2col) {
-         colmap.push_back( m_attributes.getColumnIndex(strings[i]) );
-      }
-   }
-
-   QtRegion region;
-   prefvec<Point2f> points;
-   prefvec<Line> lines;
-   Point2f p1, p2;
-
-   prefvec<pvecfloat> table;
-
-   while (!stream.eof()) {
-      stream >> inputline;
-      if (!inputline.empty()) {
-         auto strings = dXstring::split(inputline, csv ? ',' : '\t');
-         if (!strings.size()) {
-            continue;
-         }
-         // there was a check for the right number of columns here, but
-         // note my tokenize is removing a final blank column ocassionally so ignore oddly format cols (and hope they have at least fields required)
-         table.push_back( pvecfloat() );
-         for (size_t i = 0; i < cols; i++) {
-            if (i >= strings.size()) {
-               if (i == xcol || i == ycol || i == x1col || i == y1col) {
-                  return false;
-               }
-               else {
-                  table.tail().push_back( -1.0f);
-               }
-            }
-            else {
-               try {
-                  if (i == xcol || i == x1col)
-                     p1.x = stod(strings[i]);
-                  else if (i == ycol || i == y1col) 
-                     p1.y = stod(strings[i]);
-                  else if (i == x2col) 
-                     p2.x = stod(strings[i]);
-                  else if (i == y2col) 
-                     p2.y = stod(strings[i]);
-                  else {
-                     if (dXstring::isDouble(strings[i])) {
-                        table.tail().push_back( stof(strings[i]));
-                     }
-                     else {
-                        // the data column we're on
-                        // Quick mod - TV
-                        unsigned int datacol = table.tail().size();
-                        while (colcodes.size() <= datacol) {
-                           colcodes.push_back( pqmap<std::string,size_t>() ); // <- note due to numbering need one for each
-                        }
-                        if (colcodes[datacol].size() < 32) {
-                           size_t n = colcodes[datacol].searchindex(strings[i]);
-                           if (n == paftl::npos) {
-                              n = colcodes[datacol].add(strings[i],colcodes[datacol].size());
-                           }
-                           if (colcodes[datacol].size() == 32) {
-                              // Quick mod - TV
-                              // quit trying to code like this:
-                              for (unsigned int j = 0; j < table.size(); j++) {
-                                 table[j][datacol] = -1.0f;
-                              }
-                              table.tail().push_back( -1.0f );
-                           }
-                           else {
-                              table.tail().push_back( colcodes[datacol][n] );
-                           }
-                        }
-                        else {
-                           table.tail().push_back( -1.0f );
-                        }
-                     }
-                  }
-               }
-               catch (std::invalid_argument &) {
-                  return false;
-               }
-            }
-         }
-         if (pts) {
-            points.push_back(p1);
-            if (points.size() == 1) {
-               region = QtRegion(points.tail(),points.tail());
-            }
-            else {
-               region = runion(region,QtRegion(points.tail(),points.tail()));
-            }
-         }
-         else {
-            lines.push_back(Line(p1,p2));
-            if (lines.size() == 1) {
-               region = lines.tail();
-            }
-            else {
-               region = runion(region,lines.tail());
-            }
-         }
-      }
-   }
-
-   // need at least one point:
-   if (!(points.size() || lines.size())) {
-      return false;
-   }
-
-   if (pts) {
-      init(points.size(),region);
-      for (i = 0; i < points.size(); i++) {
-         makePointShape(points[i]);
-         for (int j = 0; j < m_attributes.getColumnCount(); j++) {
-            m_attributes.setValue(i,colmap[j],table[i][j]);
-         }
-      }
-   }
-   else {
-      init(lines.size(),region);
-      for (i = 0; i < lines.size(); i++) {
-         makeLineShape(lines[i]);
-         for (int j = 0; j < m_attributes.getColumnCount(); j++) {
-            m_attributes.setValue(i,colmap[j],table[i][j]);
-         }
-      }
-   }
-
-   // display an attribute:
-   invalidateDisplayedAttribute();
-   setDisplayedAttribute(-1);
-
-   return true;
+    return dataImported;
 }
 
+bool ShapeMap::importLines(const std::vector<Line> &lines,
+                           const depthmapX::Table &data)
+{
+    //assumes that lines and data come in the same order
+
+    std::vector<int> indices;
+
+    for(auto& line: lines) {
+        indices.push_back(makeLineShape(line));
+    }
+
+    bool dataImported = importData(data, indices);
+
+    invalidateDisplayedAttribute();
+    setDisplayedAttribute(-1);
+
+    return dataImported;
+}
+
+bool ShapeMap::importPolylines(const std::vector<depthmapX::Polyline> &polylines,
+                           const depthmapX::Table &data)
+{
+    //assumes that lines and data come in the same order
+
+    std::vector<int> indices;
+
+    for(auto& polyline: polylines) {
+        indices.push_back(makePolyShape(genshim::toPQVector(polyline.m_vertices), !polyline.m_closed));
+    }
+
+    bool dataImported = importData(data, indices);
+
+    invalidateDisplayedAttribute();
+    setDisplayedAttribute(-1);
+
+    return dataImported;
+}
+
+
+bool ShapeMap::importData(const depthmapX::Table &data, std::vector<int> indices)
+{
+    for (auto& column: data) {
+        std::string colName = column.first;
+        std::replace(colName.begin(), colName.end(), '_',' ');
+        dXstring::makeInitCaps(colName);
+
+        if (colName.empty()) continue;
+
+        int colIndex = m_attributes.insertColumn(colName);
+
+        if( colIndex == -1 ) {
+            // error adding column (e.g., duplicate column names)
+            continue;
+        }
+
+        std::unordered_map<std::string, size_t> colcodes;
+
+        for (size_t i = 0; i < column.second.size(); i++) {
+            std::string cellValue = column.second[i];
+            double value = 0;
+            if (dXstring::isDouble(cellValue)) {
+                value = stod(cellValue);
+            }
+            else {
+                std::unordered_map<std::string, size_t>::iterator cellAt = colcodes.find( cellValue );
+                if(cellAt == colcodes.end()) {
+
+                    // It seems that the original intention here was that if we are past 32 unique
+                    // values, we should stop trying to make the column categorical and fill the rest
+                    // of the values with -1.0f. It's not possible to test the original implementation
+                    // because the app crashes if we load a file with more than 32 unique values. When
+                    // and if we have a robust implementation of an attribute table that allows for
+                    // both categorical and plain string attributes this should be re-examined for a
+                    // better way to classify the column as either. Meanwhile after this threshold (32)
+                    // we set the whole column to -1 so that it does not give the impression it worked
+                    // when it's actually half-baked
+
+                    if(colcodes.size() >= 32) {
+                        for (size_t j = 0; j < column.second.size(); j++) {
+                            m_attributes.setValue(indices[j], colIndex, -1.0f);
+                        }
+                        continue;
+                    } else {
+                        value = colcodes.size();
+                        colcodes.insert(std::make_pair(cellValue, colcodes.size()));
+                    }
+                } else {
+                    value = cellAt->second;
+                }
+            }
+            m_attributes.setValue(indices[i], colIndex, value);
+        }
+    }
+    return true;
+}
 
 //////////////////////////////////////////////////////////////////////////////////
 
@@ -3506,6 +3411,19 @@ Line ShapeMap::getNextLinkLine() const
    return Line();
 }
 
+std::vector<SimpleLine> ShapeMap::getAllLinkLines()
+{
+    std::vector<SimpleLine> linkLines;
+    for(size_t i = 0; i < m_links.size(); i++)
+    {
+        linkLines.push_back(SimpleLine(
+                                m_shapes.value(m_links[i].a).getCentroid(),
+                                m_shapes.value(m_links[i].b).getCentroid()
+                                ));
+    }
+    return linkLines;
+}
+
 // note: these functions would need slight work for arbitrary shape overlaps
 
 bool ShapeMap::findNextUnlinkPoint() const
@@ -3524,6 +3442,17 @@ Point2f ShapeMap::getNextUnlinkPoint() const
                                 m_shapes.value(m_unlinks[m_curunlinkpoint].b).getLine(), TOLERANCE_A);
    }
    return Point2f();
+}
+std::vector<Point2f> ShapeMap::getAllUnlinkPoints()
+{
+    std::vector<Point2f> unlinkPoints;
+    for(size_t i = 0; i < m_unlinks.size(); i++)
+    {
+        unlinkPoints.push_back(intersection_point(m_shapes.value(m_unlinks[i].a).getLine(),
+                                                  m_shapes.value(m_unlinks[i].b).getLine(), TOLERANCE_A));
+    }
+    return unlinkPoints;
+
 }
 
 void ShapeMap::outputUnlinkPoints( ofstream& stream, char delim )
@@ -4216,4 +4145,62 @@ void ShapeMap::ozlemSpecial7(ShapeMap& linemap)
 
    m_displayed_attribute = -2;
    setDisplayedAttribute(linerefcol);
+}
+
+std::vector<SimpleLine> ShapeMap::getAllShapesAsLines() {
+    std::vector<SimpleLine> lines;
+    pqmap<int,SalaShape>& allShapes = getAllShapes();
+    for (size_t k = 0; k < allShapes.size(); k++) {
+        SalaShape& shape = allShapes[k];
+        if (shape.isLine()) {
+            lines.push_back(SimpleLine(shape.getLine()));
+        }
+        else if (shape.isPolyLine() || shape.isPolygon()) {
+            for (size_t n = 0; n < shape.size() - 1; n++) {
+                lines.push_back(SimpleLine(shape[n],shape[n+1]));
+            }
+            if (shape.isPolygon()) {
+                lines.push_back(SimpleLine(shape.tail(),shape.head()));
+            }
+        }
+    }
+    return lines;
+}
+
+std::vector<std::pair<SimpleLine, PafColor>> ShapeMap::getAllLinesWithColour() {
+    std::vector<std::pair<SimpleLine, PafColor>> colouredLines;
+    const AttributeTable &attributeTable = getAttributeTable();
+    pqmap<int,SalaShape>& allShapes = getAllShapes();
+    for (size_t k = 0; k < allShapes.size(); k++) {
+        SalaShape& shape = allShapes[k];
+        PafColor color(attributeTable.getDisplayColor(k));
+        if (shape.isLine()) {
+            colouredLines.push_back(std::pair<SimpleLine, PafColor> (SimpleLine(shape.getLine()), color));
+        }
+        else if (shape.isPolyLine()) {
+            for (size_t n = 0; n < shape.size() - 1; n++) {
+                colouredLines.push_back(std::pair<SimpleLine, PafColor> (SimpleLine(shape[n],shape[n+1]), color));
+            }
+        }
+    }
+    return colouredLines;
+}
+
+std::map<std::vector<Point2f>, PafColor> ShapeMap::getAllPolygonsWithColour() {
+    std::map<std::vector<Point2f>, PafColor> colouredPolygons;
+    const AttributeTable &attributeTable = getAttributeTable();
+    pqmap<int,SalaShape>& allShapes = getAllShapes();
+    for (size_t k = 0; k < allShapes.size(); k++) {
+        SalaShape& shape = allShapes[k];
+        if (shape.isPolygon()) {
+            std::vector<Point2f> vertices;
+            for (size_t n = 0; n < shape.size(); n++) {
+                vertices.push_back(shape[n]);
+            }
+            vertices.push_back(shape.tail());
+            PafColor colour(attributeTable.getDisplayColor(k));
+            colouredPolygons.insert(std::make_pair(vertices, colour));
+        }
+    }
+    return colouredPolygons;
 }

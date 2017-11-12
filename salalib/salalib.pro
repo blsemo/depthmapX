@@ -42,7 +42,9 @@ SOURCES += \
     gridproperties.cpp \
     attributetable.cpp \
     layermanagerimpl.cpp \
-    attributetableview.cpp
+    attributetableview.cpp \
+    geometrygenerators.cpp \
+    importutils.cpp
 
 HEADERS += \
     attributes.h \
@@ -76,7 +78,10 @@ HEADERS += \
     layermanager.h \
     layermanagerimpl.h \
     attributetablehelpers.h \
-    attributetableview.h
+    attributetableview.h \
+    geometrygenerators.h \
+    importutils.h \
+    importtypedefs.h
 
 DISTFILES += \
     salascript-tests.txt
