@@ -269,7 +269,7 @@ public:
    // convert a single point into a shape
    int makePointShape(const Point2f& point, bool tempshape = false);
    // or a single line into a shape
-   int makeLineShape(const Line& line, bool through_ui = false, bool tempshape = false);
+   int makeLineShape(const Line& line, bool through_ui = false, bool tempshape = false, const std::map<int, float>& extraAttributes = std::map<int,float>());
    // or a polygon into a shape
    int makePolyShape(const pqvector<Point2f>& points, bool open, bool tempshape = false);
 public:

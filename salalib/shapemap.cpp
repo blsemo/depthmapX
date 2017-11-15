@@ -365,7 +365,7 @@ int ShapeMap::makePointShape(const Point2f& point, bool tempshape)
    return m_shape_ref;
 }
 
-int ShapeMap::makeLineShape(const Line& line, bool through_ui, bool tempshape)
+int ShapeMap::makeLineShape(const Line& line, bool through_ui, bool tempshape, const std::map<int, float>& extraAttributes)
 {
    // note, map must have editable flag on if we are to make a shape through the user interface:
    if (through_ui && !m_editable) {
@@ -395,7 +395,11 @@ int ShapeMap::makeLineShape(const Line& line, bool through_ui, bool tempshape)
    }
 
    if (!tempshape) {
-      m_attributes.insertRow(m_shape_ref);
+      auto& row = m_attributes.addRow(m_shape_ref);
+      for (auto& attr : extraAttributes)
+      {
+          row.setValue(attr.first, attr.second);
+      }
       m_newshape = true;
    }
 

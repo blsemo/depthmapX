@@ -1326,24 +1326,21 @@ int ShapeGraphs::convertDrawingToAxial(Communicator *comm, const std::string& na
    // we can stop here for all line axial map!
    ShapeGraph& usermap = tail();
 
-   usermap.init(lines.size(),region);        // used to be double density
+   usermap.init(lines.size(),region);
+   std::map<int,float> layerAttrib;
+   if (recordlayer)
+   {
+       layerAttrib[usermap.getAttributeTable().insertOrResetColumn("Drawing Layer")] = 0.0f;
+   }
    for (size_t k = 0; k < lines.size(); k++) {
-      usermap.makeLineShape(lines[k]);
-   }
-
-   // n.b. make connections also initialises attributes
-   usermap.makeConnections();
-
-   // record origin layer only if more than one layer:
-   if (recordlayer) {
-      auto& table = usermap.getAttributeTable();
-      int col = table.insertOrResetColumn("Drawing Layer");
-      for (size_t k = 0; k < lines.size(); k++) {
-         table.setValue(k,col,float(layers.search(lines.key(k))));
+      if (recordlayer)
+      {
+          layerAttrib.begin()->second = float(layers.search(lines.key(k)));
       }
+      usermap.makeLineShape(lines[k], false,false,layerAttrib);
    }
 
-   // we can stop here!
+   usermap.makeConnections();
    setDisplayedMapRef(mapref);
 
    return mapref;
@@ -1406,30 +1403,36 @@ int ShapeGraphs::convertDataToAxial(Communicator *comm, const std::string& name,
    // we can stop here for all line axial map!
    ShapeGraph& usermap = tail();
 
+   // make columns in target table
+   std::map<int, int> colMapping;
+   auto& input = shapemap.getAttributeTable();
+   auto& output = usermap.getAttributeTable();
+   if (copydata) {
+      for (int i = 0; i < input.getNumColumns(); i++) {
+         std::string colname = input.getColumnName(i);
+         for (size_t k = 1; output.getColumnIndex(colname) != -1; k++)
+            colname = dXstring::formatString((int)k,input.getColumnName(i) + " %d");
+         colMapping[i] = output.insertOrResetColumn(colname);
+      }
+   }
+
    usermap.init(lines.size(),region);  // used to be double density
+   std::map<int,float> extraAttributes;
    for (size_t k = 0; k < lines.size(); k++) {
-      usermap.makeLineShape(lines[k]);
+      if (copydata)
+      {
+          auto& sourceRow = input.getRow(keys.search(lines.key(k)));
+          for (auto& kvp : colMapping)
+          {
+              extraAttributes[kvp.second] = sourceRow.getValue(kvp.first);
+          }
+      }
+      usermap.makeLineShape(lines[k],false, false, extraAttributes);
    }
 
    // n.b. make connections also initialises attributes
    usermap.makeConnections();
 
-   // use property that segments are still in same order as input in order to copy
-   // data across from ShapeMap
-   if (copydata) {
-      AttributeTable& input = shapemap.getAttributeTable();
-      AttributeTable& output = usermap.getAttributeTable();
-      for (int i = 0; i < input.getColumnCount(); i++) {
-         std::string colname = input.getColumnName(i);
-         for (size_t k = 1; output.getColumnIndex(colname) != -1; k++) 
-            colname = dXstring::formatString((int)k,input.getColumnName(i) + " %d");
-         int outcol = output.insertColumn(colname);
-         for (size_t j = 0; j < lines.size(); j++) {
-            int inrow = input.getRowid(keys.search(lines.key(j)));
-            output.setValue(j,outcol,input.getValue(inrow,i));
-         }
-      }
-   }
 
    // if we are inheriting from a mapinfo map, pass on the coordsys and bounds:
    if (shapemap.getMapInfoData()) {
@@ -1458,7 +1461,7 @@ int ShapeGraphs::convertDrawingToConvex(Communicator *comm, const std::string& n
 
    int mapref = addMap(name,ShapeMap::CONVEXMAP);
    ShapeGraph& usermap = tail();
-   int conn_col = usermap.m_attributes.insertLockedColumn("Connectivity");
+   int conn_col = usermap.m_attributes.insertOrResetLockedColumn("Connectivity");
    
    size_t count = 0;
    size_t i = 0;
