@@ -274,7 +274,7 @@ public:
    int makePolyShape(const pqvector<Point2f>& points, bool open, bool tempshape = false);
 public:
    // or make a shape from a shape
-   int makeShape(const SalaShape& shape, int override_shape_ref = -1);
+   dXreimpl::AttributeRow& makeShape(const SalaShape& shape, int override_shape_ref = -1);
    // convert points to polygons
    bool convertPointsToPolys(double poly_radius, bool selected_only);
    // convert a selected pixels to a layer object (note, uses selection attribute on pixel, you must select to make this work):

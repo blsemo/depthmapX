@@ -1471,9 +1471,9 @@ int ShapeGraphs::convertDrawingToConvex(Communicator *comm, const std::string& n
             for (size_t k = 0; k < superspacepix.at(i).at(j).getAllShapes().size(); k++) {
                SalaShape& shape = superspacepix.at(i).at(j).getAllShapes().at(k);
                if (shape.isPolygon()) {
-                  usermap.makeShape(shape);
+                  auto& attribRow = usermap.makeShape(shape);
                   usermap.m_connectors.push_back( Connector() );
-                  usermap.m_attributes.setValue(count,conn_col,0);
+                  attribRow.setValue(conn_col,0);
                   count++;
                }
             }
@@ -1505,34 +1505,33 @@ int ShapeGraphs::convertDataToConvex(Communicator *comm, const std::string& name
 
    int mapref = addMap(name,ShapeMap::CONVEXMAP);
    ShapeGraph& usermap = getMap(mapref);
-   int conn_col = usermap.m_attributes.insertLockedColumn("Connectivity");
+   int conn_col = usermap.m_attributes.insertOrResetLockedColumn("Connectivity");
 
-   pvecint lookup;
-
+   bool foundPolygon = false;
    for (size_t k = 0; k < shapemap.getAllShapes().size(); k++) {
       SalaShape& shape = shapemap.getAllShapes().at(k);
       if (shape.isPolygon()) {
-         int n = usermap.makeShape(shape);
+         auto& attribRow = usermap.makeShape(shape);
          usermap.m_connectors.push_back( Connector() );
-         usermap.m_attributes.setValue(n,conn_col,0);
-         lookup.push_back(k);
+         attribRow.setValue(conn_col,0);
+         foundPolygon = true;
       }
    }
-   if (lookup.size() == 0) {
+   if (!foundPolygon) {
       removeMap(mapref);
       return -1;
    }
 
    if (copydata) {
-      AttributeTable& input = shapemap.getAttributeTable();
-      AttributeTable& output = usermap.getAttributeTable();
-      for (int i = 0; i < input.getColumnCount(); i++) {
+      auto& input = shapemap.getAttributeTable();
+      auto& output = usermap.getAttributeTable();
+      for (size_t i = 0; i < input.getNumColumns(); i++) {
          std::string colname = input.getColumnName(i);
          for (int k = 1; output.getColumnIndex(colname) != -1; k++) 
             colname = dXstring::formatString(k,input.getColumnName(i) + " %d");
-         int outcol = output.insertColumn(colname);
-         for (size_t j = 0; j < lookup.size(); j++) {
-            output.setValue(j,outcol,input.getValue(lookup[j],i));
+         int outcol = output.insertOrResetColumn(colname);
+         for ( auto& row : output){
+             row.getRow().setValue(outcol, input.getRow(row.getKey()).getValue(i));
          }
       }
    }
@@ -1635,21 +1634,22 @@ int ShapeGraphs::convertDrawingToSegment(Communicator *comm, const std::string& 
 
    usermap.init(lines.size(),region);
 
+   int attribCol = 0;
+   // record origin layer only if more than one layer:
+   if (recordlayer) {
+      attribCol = usermap.getAttributeTable().insertOrResetColumn("Drawing Layer");
+   }
+
    for (size_t k = 0; k < lines.size(); k++) {
-      usermap.makeLineShape(lines[k]);
+       std::map<int, float> attributes;
+       if (recordlayer){
+           attributes[attribCol] = float(layers.search(lines.key(k)));
+       }
+       usermap.makeLineShape(lines[k], false, false, attributes);
    }
 
    // make it!
    usermap.makeNewSegMap();
-
-   // record origin layer only if more than one layer:
-   if (recordlayer) {
-      AttributeTable& table = usermap.getAttributeTable();
-      int col = table.insertColumn("Drawing Layer");
-      for (size_t k = 0; k < lines.size(); k++) {
-         table.setValue(k,col,float(layers.search(lines.key(k))));
-      }
-   }
 
    // we can stop here!
    setDisplayedMapRef(mapref);

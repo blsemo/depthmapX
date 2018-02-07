@@ -492,7 +492,7 @@ int ShapeMap::makePolyShape(const pqvector<Point2f>& points, bool open, bool tem
    return m_shape_ref;
 }
 
-int ShapeMap::makeShape(const SalaShape& poly, int override_shape_ref)
+dXreimpl::AttributeRow& ShapeMap::makeShape(const SalaShape& poly, int override_shape_ref)
 {
    // overridden shape cannot exist:
    if (override_shape_ref != -1 && m_shapes.searchindex(override_shape_ref) != paftl::npos) {
@@ -531,7 +531,7 @@ int ShapeMap::makeShape(const SalaShape& poly, int override_shape_ref)
       }
    }
 
-   int rowid2 = m_attributes.insertRow(shape_ref);
+   auto& row = m_attributes.addRow(shape_ref);
 
 #ifdef _DEBUG
    if (rowid1 != rowid2) {
@@ -542,7 +542,7 @@ int ShapeMap::makeShape(const SalaShape& poly, int override_shape_ref)
 
    m_newshape = true;
 
-   return shape_ref;
+   return row;
 }
 
 
