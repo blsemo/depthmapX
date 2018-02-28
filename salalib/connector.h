@@ -18,6 +18,8 @@
 #ifndef __CONNECTOR_H__
 #define __CONNECTOR_H__
 
+#include <attributetable.h>
+
 /////////////////////////////////////////////////////////////////////////////
 
 // Additional for segment analysis
@@ -66,6 +68,7 @@ inline bool operator != (SegmentData a, SegmentData b) { return a.metricdepth !=
 
 struct Connector
 {
+    dXreimpl::AttributeRow& m_attRow;
    // cursor included purely to make this compatible with DLL functionality
    mutable int m_cursor;
    //  if this is a segment, this is the key for the axial line:
@@ -76,7 +79,7 @@ struct Connector
    pmap<SegmentRef,float> m_back_segconns;
    pmap<SegmentRef,float> m_forward_segconns;
    //
-   Connector(int axialref = -1)
+   Connector(dXreimpl::AttributeRow &row, int axialref = -1) : m_attRow(row)
    { m_segment_axialref = axialref; m_cursor = -1; }
    void clear()
    { m_connections.clear(); m_back_segconns.clear(); m_forward_segconns.clear(); }

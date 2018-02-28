@@ -1472,7 +1472,7 @@ int ShapeGraphs::convertDrawingToConvex(Communicator *comm, const std::string& n
                SalaShape& shape = superspacepix.at(i).at(j).getAllShapes().at(k);
                if (shape.isPolygon()) {
                   auto& attribRow = usermap.makeShape(shape);
-                  usermap.m_connectors.push_back( Connector() );
+                  usermap.m_connectors.push_back( Connector(attribRow) );
                   attribRow.setValue(conn_col,0);
                   count++;
                }
@@ -1512,7 +1512,7 @@ int ShapeGraphs::convertDataToConvex(Communicator *comm, const std::string& name
       SalaShape& shape = shapemap.getAllShapes().at(k);
       if (shape.isPolygon()) {
          auto& attribRow = usermap.makeShape(shape);
-         usermap.m_connectors.push_back( Connector() );
+         usermap.m_connectors.push_back( Connector(attribRow) );
          attribRow.setValue(conn_col,0);
          foundPolygon = true;
       }
@@ -1722,8 +1722,29 @@ int ShapeGraphs::convertDataToSegment(Communicator *comm, const std::string& nam
    }
 
    usermap.init(lines.size(),region);
+
+   std::vector<int> colMapping;
+   auto& input = shapemap.getAttributeTable();
+   if (copydata) {
+      auto& output = usermap.getAttributeTable();
+      //
+      for (int i = 0; i < input.getNumColumns(); i++) {
+         std::string colname = input.getColumnName(i);
+         for (int k = 1; output.getColumnIndex(colname) != -1; k++)
+            colname = dXstring::formatString(k,input.getColumnName(i) + " %d");
+         colMapping.push_back(output.insertOrResetColumn(colname));
+       }
+    }
+
    for (size_t k = 0; k < lines.size(); k++) {
-      usermap.makeLineShape(lines[k]);
+      std::map<int, float> dataCopy;
+      if (copydata){
+          auto& line = input.getRow(lines.key(k));
+         for(int i = 0; i < input.getNumColumns(); ++i){
+             dataCopy[colMapping[i]] = line.getValue(i);
+         }
+      }
+      usermap.makeLineShape(lines[k],0,0,dataCopy);
    }
 
    // start to be a little bit more efficient about memory now we are hitting the limits
@@ -1734,24 +1755,6 @@ int ShapeGraphs::convertDataToSegment(Communicator *comm, const std::string& nam
 
    // make it!
    usermap.makeNewSegMap();
-
-   // use property that segments are still in same order as input in order to copy
-   // data across from ShapeMap
-   if (copydata) {
-      AttributeTable& input = shapemap.getAttributeTable();
-      AttributeTable& output = usermap.getAttributeTable();
-      //
-      for (int i = 0; i < input.getColumnCount(); i++) {
-         std::string colname = input.getColumnName(i);
-         for (int k = 1; output.getColumnIndex(colname) != -1; k++) 
-            colname = dXstring::formatString(k,input.getColumnName(i) + " %d");
-         int outcol = output.insertColumn(colname);
-         for (size_t j = 0; j < lines.size(); j++) {
-            int inrow = input.getRowid(keys.search(lines.key(j)));
-            output.setValue(j,outcol,input.getValue(inrow,i));
-         }
-      }
-   }
 
    usermap.m_displayed_attribute = -2; // <- override if it's already showing
    usermap.setDisplayedAttribute( usermap.m_attributes.getColumnIndex("Connectivity") );
@@ -1937,17 +1940,17 @@ void ShapeGraph::makeConnections(const prefvec<pvecint>& keyvertices)
    m_keyvertices.clear();
 
    // note, expects these to be numbered 0, 1...
-   int conn_col = m_attributes.insertLockedColumn("Connectivity");
-   int leng_col = m_attributes.insertLockedColumn("Line Length");
+   int conn_col = m_attributes.insertOrResetLockedColumn("Connectivity");
+   int leng_col = m_attributes.insertOrResetLockedColumn("Line Length");
 
    for (size_t i = 0; i < m_shapes.size(); i++) {
       int key = m_shapes.key(i);
-      int rowid = m_attributes.insertRow(key);
+      auto& row  = m_attributes.addRow(key);
       // all indices should match...
-      m_connectors.push_back( Connector() );
+      m_connectors.push_back( Connector(row) );
       int connectivity = getLineConnections( key, m_connectors[i].m_connections, TOLERANCE_B*__max(m_region.height(),m_region.width()));
-      m_attributes.setValue(rowid, conn_col, (float) connectivity );
-      m_attributes.setValue(rowid, leng_col, (float) m_shapes[i].getLine().length() );
+      row.setValue(conn_col, (float) connectivity );
+      row.setValue(leng_col, (float) m_shapes[i].getLine().length() );
       if (keyvertices.size()) {
          // note: depends on lines being recorded in same order as keyvertices...
          m_keyvertices.push_back( keyvertices[i] );
@@ -2209,7 +2212,7 @@ bool ShapeGraph::integrate(Communicator *comm, const pvecint& radius_list, bool 
    if (weighting_col != -1) {
       weighting_col_text = m_attributes.getColumnName(weighting_col);
       for (size_t i = 0; i < m_connectors.size(); i++) {
-         weights.push_back(m_attributes.getValue(i,weighting_col));
+         weights.push_back(m_connectors[i].m_attRow.getValue(weighting_col));
       }
    }
 
@@ -2222,14 +2225,14 @@ bool ShapeGraph::integrate(Communicator *comm, const pvecint& radius_list, bool 
       }
       if (choice) {
          std::string choice_col_text = std::string("Choice") + radius_text;
-         m_attributes.insertColumn(choice_col_text.c_str());
+         m_attributes.insertOrResetColumn(choice_col_text.c_str());
          std::string n_choice_col_text = std::string("Choice [Norm]") + radius_text;
-         m_attributes.insertColumn(n_choice_col_text.c_str());
+         m_attributes.insertOrResetColumn(n_choice_col_text.c_str());
          if (weighting_col != -1) {
             std::string w_choice_col_text = std::string("Choice [") + weighting_col_text + " Wgt]" + radius_text;
-            m_attributes.insertColumn(w_choice_col_text.c_str());
+            m_attributes.insertOrResetColumn(w_choice_col_text.c_str());
             std::string nw_choice_col_text = std::string("Choice [") + weighting_col_text + " Wgt][Norm]" + radius_text;
-            m_attributes.insertColumn(nw_choice_col_text.c_str());
+            m_attributes.insertOrResetColumn(nw_choice_col_text.c_str());
          }
       }
 
@@ -2238,72 +2241,72 @@ bool ShapeGraph::integrate(Communicator *comm, const pvecint& radius_list, bool 
 #ifndef _COMPILE_dX_SIMPLE_VERSION
       if(!simple_version) {
           std::string entropy_col_text = std::string("Entropy") + radius_text;
-          m_attributes.insertColumn(entropy_col_text.c_str());
+          m_attributes.insertOrResetColumn(entropy_col_text.c_str());
       }
 #endif
 
       std::string integ_dv_col_text = std::string("Integration [HH]") + radius_text;
-      m_attributes.insertColumn(integ_dv_col_text.c_str());
+      m_attributes.insertOrResetColumn(integ_dv_col_text.c_str());
 
 #ifndef _COMPILE_dX_SIMPLE_VERSION
       if(!simple_version) {
           std::string integ_pv_col_text = std::string("Integration [P-value]") + radius_text;
-          m_attributes.insertColumn(integ_pv_col_text.c_str());
+          m_attributes.insertOrResetColumn(integ_pv_col_text.c_str());
           std::string integ_tk_col_text = std::string("Integration [Tekl]") + radius_text;
-          m_attributes.insertColumn(integ_tk_col_text.c_str());
+          m_attributes.insertOrResetColumn(integ_tk_col_text.c_str());
           std::string intensity_col_text = std::string("Intensity") + radius_text;
-          m_attributes.insertColumn(intensity_col_text.c_str());
+          m_attributes.insertOrResetColumn(intensity_col_text.c_str());
           std::string harmonic_col_text = std::string("Harmonic Mean Depth") + radius_text;
-          m_attributes.insertColumn(harmonic_col_text.c_str());
+          m_attributes.insertOrResetColumn(harmonic_col_text.c_str());
       }
 #endif
 
       std::string depth_col_text = std::string("Mean Depth") + radius_text;
-      m_attributes.insertColumn(depth_col_text.c_str());
+      m_attributes.insertOrResetColumn(depth_col_text.c_str());
       std::string count_col_text = std::string("Node Count") + radius_text;
-      m_attributes.insertColumn(count_col_text.c_str());
+      m_attributes.insertOrResetColumn(count_col_text.c_str());
 
 #ifndef _COMPILE_dX_SIMPLE_VERSION
       if(!simple_version) {
           std::string rel_entropy_col_text = std::string("Relativised Entropy") + radius_text;
-          m_attributes.insertColumn(rel_entropy_col_text);
+          m_attributes.insertOrResetColumn(rel_entropy_col_text);
       }
 #endif
 
       if (weighting_col != -1) {
          std::string w_md_col_text = std::string("Mean Depth [") + weighting_col_text + " Wgt]" + radius_text;
-         m_attributes.insertColumn(w_md_col_text.c_str());
+         m_attributes.insertOrResetColumn(w_md_col_text.c_str());
          std::string total_weight_text = std::string("Total ") + weighting_col_text + radius_text;
-         m_attributes.insertColumn(total_weight_text.c_str());
+         m_attributes.insertOrResetColumn(total_weight_text.c_str());
       }
       if (fulloutput) {
 
 #ifndef _COMPILE_dX_SIMPLE_VERSION
          if(!simple_version) {
              std::string penn_norm_text = std::string("RA [Penn]") + radius_text;
-             m_attributes.insertColumn(penn_norm_text);
+             m_attributes.insertOrResetColumn(penn_norm_text);
          }
 #endif
          std::string ra_col_text = std::string("RA") + radius_text;
-         m_attributes.insertColumn(ra_col_text.c_str());
+         m_attributes.insertOrResetColumn(ra_col_text.c_str());
 
 #ifndef _COMPILE_dX_SIMPLE_VERSION
          if(!simple_version) {
              std::string rra_col_text = std::string("RRA") + radius_text;
-             m_attributes.insertColumn(rra_col_text.c_str());
+             m_attributes.insertOrResetColumn(rra_col_text.c_str());
          }
 #endif
 
          std::string td_col_text = std::string("Total Depth") + radius_text;
-         m_attributes.insertColumn(td_col_text.c_str());
+         m_attributes.insertOrResetColumn(td_col_text.c_str());
       }
       //
    }
    if (local) {
 #ifndef _COMPILE_dX_SIMPLE_VERSION
       if(!simple_version) {
-          m_attributes.insertColumn("Control");
-          m_attributes.insertColumn("Controllability");
+          m_attributes.insertOrResetColumn("Control");
+          m_attributes.insertOrResetColumn("Controllability");
       }
 #endif
    }
@@ -2408,8 +2411,10 @@ bool ShapeGraph::integrate(Communicator *comm, const pvecint& radius_list, bool 
    // has already failed due to this!  when intro hand drawn fewest line (where user may have deleted)
    // it's going to get worse...
 
-   bool *covered = new bool [m_connectors.size()];
+   std::vector<bool> covered(m_connectors.size());
    for (size_t i = 0; i < m_connectors.size(); i++) {
+       auto& currentRow = m_connectors[i].m_attRow;
+
       for (size_t j = 0; j < m_connectors.size(); j++) {
          covered[j] = false;
       }
@@ -2449,12 +2454,12 @@ bool ShapeGraph::integrate(Communicator *comm, const pvecint& radius_list, bool 
 #ifndef _COMPILE_dX_SIMPLE_VERSION
          if(!simple_version) {
              if (connections.size() > 0) {
-                 m_attributes.setValue(i, control_col, float(control) );
-                 m_attributes.setValue(i, controllability_col, float( double(connections.size()) / double(totalneighbourhood.size()-1)) );
+                 currentRow.setValue(control_col, float(control) );
+                 currentRow.setValue(controllability_col, float( double(connections.size()) / double(totalneighbourhood.size()-1)) );
              }
              else {
-                 m_attributes.setValue(i, control_col, -1 );
-                 m_attributes.setValue(i, controllability_col, -1 );
+                 currentRow.setValue(control_col, -1 );
+                 currentRow.setValue(controllability_col, -1 );
              }
          }
 #endif
@@ -2531,18 +2536,18 @@ bool ShapeGraph::integrate(Communicator *comm, const pvecint& radius_list, bool 
             }
          }
          // set the attributes for this node:
-         m_attributes.setValue(i,count_col[r],float(node_count));
+         currentRow.setValue(count_col[r],float(node_count));
          if (weighting_col != -1) {
-            m_attributes.setValue(i,total_weight_col[r],float(total_weight));
+            currentRow.setValue(total_weight_col[r],float(total_weight));
          }
          // node count > 1 to avoid divide by zero (was > 2)
          if (node_count > 1) {
             // note -- node_count includes this one -- mean depth as per p.108 Social Logic of Space
             double mean_depth = double(total_depth) / double(node_count - 1);
-            m_attributes.setValue(i,depth_col[r],float(mean_depth));
+            currentRow.setValue(depth_col[r],float(mean_depth));
             if (weighting_col != -1) {
                // weighted mean depth:
-               m_attributes.setValue(i,w_depth_col[r],float(w_total_depth/total_weight));
+               currentRow.setValue(w_depth_col[r],float(w_total_depth/total_weight));
             }
             // total nodes > 2 to avoid divide by 0 (was > 3)
             if (node_count > 2 && mean_depth > 1.0) {
@@ -2551,29 +2556,29 @@ bool ShapeGraph::integrate(Communicator *comm, const pvecint& radius_list, bool 
                double rra_d = ra / dvalue(node_count);
                double rra_p = ra / dvalue(node_count);
                double integ_tk = teklinteg(node_count, total_depth);
-               m_attributes.setValue(i,integ_dv_col[r],float(1.0/rra_d));
+               currentRow.setValue(integ_dv_col[r],float(1.0/rra_d));
 
 #ifndef _COMPILE_dX_SIMPLE_VERSION
                if(!simple_version) {
-                   m_attributes.setValue(i,integ_pv_col[r],float(1.0/rra_p));
+                   currentRow.setValue(integ_pv_col[r],float(1.0/rra_p));
                    if (total_depth - node_count + 1 > 1) {
-                       m_attributes.setValue(i,integ_tk_col[r],float(integ_tk));
+                       currentRow.setValue(integ_tk_col[r],float(integ_tk));
                    }
                    else {
-                       m_attributes.setValue(i,integ_tk_col[r],-1.0f);
+                       currentRow.setValue(integ_tk_col[r],-1.0f);
                    }
                }
 #endif
 
                if (fulloutput) {
-                  m_attributes.setValue(i,ra_col[r],float(ra));
+                  currentRow.setValue(ra_col[r],float(ra));
 
 #ifndef _COMPILE_dX_SIMPLE_VERSION
                   if(!simple_version) {
-                      m_attributes.setValue(i,rra_col[r],float(rra_d));
+                      currentRow.setValue(rra_col[r],float(rra_d));
                   }
 #endif
-                  m_attributes.setValue(i,td_col[r],float(total_depth));
+                  currentRow.setValue(td_col[r],float(total_depth));
 
 #ifndef _COMPILE_dX_SIMPLE_VERSION
                   if(!simple_version) {
@@ -2581,35 +2586,35 @@ bool ShapeGraph::integrate(Communicator *comm, const pvecint& radius_list, bool 
                       double dmin = node_count - 1;
                       double dmax = palmtree(node_count, depth - 1);
                       if (dmax != dmin) {
-                          m_attributes.setValue(i,penn_norm_col[r],float((dmax - total_depth)/(dmax - dmin)));
+                          currentRow.setValue(penn_norm_col[r],float((dmax - total_depth)/(dmax - dmin)));
                       }
                   }
 #endif
                }
             }
             else {
-               m_attributes.setValue(i,integ_dv_col[r],-1.0f);
+               currentRow.setValue(integ_dv_col[r],-1.0f);
 
 #ifndef _COMPILE_dX_SIMPLE_VERSION
                if(!simple_version) {
-                   m_attributes.setValue(i,integ_pv_col[r],-1.0f);
-                   m_attributes.setValue(i,integ_tk_col[r],-1.0f);
+                   currentRow.setValue(integ_pv_col[r],-1.0f);
+                   currentRow.setValue(integ_tk_col[r],-1.0f);
                }
 #endif
                if (fulloutput) {
-                  m_attributes.setValue(i,ra_col[r],-1.0f);
+                  currentRow.setValue(ra_col[r],-1.0f);
 
 #ifndef _COMPILE_dX_SIMPLE_VERSION
                   if(!simple_version) {
-                      m_attributes.setValue(i,rra_col[r],-1.0f);
+                      currentRow.setValue(rra_col[r],-1.0f);
                   }
 #endif
 
-                  m_attributes.setValue(i,td_col[r],-1.0f);
+                  currentRow.setValue(td_col[r],-1.0f);
 
 #ifndef _COMPILE_dX_SIMPLE_VERSION
                   if(!simple_version) {
-                      m_attributes.setValue(i,penn_norm_col[r],-1.0f);
+                      currentRow.setValue(penn_norm_col[r],-1.0f);
                   }
 #endif
                }
@@ -2639,24 +2644,24 @@ bool ShapeGraph::integrate(Communicator *comm, const pvecint& radius_list, bool 
                 else {
                     intensity = -1;
                 }
-                m_attributes.setValue(i,entropy_col[r],float(entropy));
-                m_attributes.setValue(i,rel_entropy_col[r],float(rel_entropy));
-                m_attributes.setValue(i,intensity_col[r],float(intensity));
-                m_attributes.setValue(i,harmonic_col[r],float(harmonic));
+                currentRow.setValue(entropy_col[r],float(entropy));
+                currentRow.setValue(rel_entropy_col[r],float(rel_entropy));
+                currentRow.setValue(intensity_col[r],float(intensity));
+                currentRow.setValue(harmonic_col[r],float(harmonic));
             }
 #endif
          }
          else {
-            m_attributes.setValue(i,depth_col[r],-1.0f);
-            m_attributes.setValue(i,integ_dv_col[r],-1.0f);
+            currentRow.setValue(depth_col[r],-1.0f);
+            currentRow.setValue(integ_dv_col[r],-1.0f);
 
 #ifndef _COMPILE_dX_SIMPLE_VERSION
             if(!simple_version) {
-                m_attributes.setValue(i,integ_pv_col[r],-1.0f);
-                m_attributes.setValue(i,integ_tk_col[r],-1.0f);
-                m_attributes.setValue(i,entropy_col[r],-1.0f);
-                m_attributes.setValue(i,rel_entropy_col[r],-1.0f);
-                m_attributes.setValue(i,harmonic_col[r],-1.0f);
+                currentRow.setValue(integ_pv_col[r],-1.0f);
+                currentRow.setValue(integ_tk_col[r],-1.0f);
+                currentRow.setValue(entropy_col[r],-1.0f);
+                currentRow.setValue(rel_entropy_col[r],-1.0f);
+                currentRow.setValue(harmonic_col[r],-1.0f);
             }
 #endif
          }
@@ -2666,40 +2671,39 @@ bool ShapeGraph::integrate(Communicator *comm, const pvecint& radius_list, bool 
       if (comm) {
          if (qtimer( atime, 500 )) {
             if (comm->IsCancelled()) {
-               delete [] covered;
                throw Communicator::CancelledException();
             }
             comm->CommPostMessage( Communicator::CURRENT_RECORD, i );
          }         
       }
    }
-   delete [] covered;
    if (choice) {
       for (size_t i = 0; i < m_connectors.size(); i++) {
+         auto& currentRow = m_connectors[i].m_attRow;
          double total_choice = 0.0, w_total_choice = 0.0;
          for (size_t r = 0; r < radius.size(); r++) {
             total_choice += audittrail[i][r].choice;
             w_total_choice += audittrail[i][r].weighted_choice;
             // n.b., normalise choice according to (n-1)(n-2)/2 (maximum possible through routes)
-            double node_count = m_attributes.getValue(i,count_col[r]);
+            double node_count = currentRow.getValue(count_col[r]);
             double total_weight;
             if (weighting_col != -1) {
-                total_weight = m_attributes.getValue(i,total_weight_col[r]);
+                total_weight = currentRow.getValue(total_weight_col[r]);
             }
             if (node_count > 2) {
-               m_attributes.setValue(i,choice_col[r],float(total_choice));
-               m_attributes.setValue(i,n_choice_col[r],float(2.0*total_choice/((node_count-1)*(node_count-2))));
+               currentRow.setValue(choice_col[r],float(total_choice));
+               currentRow.setValue(n_choice_col[r],float(2.0*total_choice/((node_count-1)*(node_count-2))));
                if (weighting_col != -1) {
-                  m_attributes.setValue(i,w_choice_col[r],float(w_total_choice));
-                  m_attributes.setValue(i,nw_choice_col[r],float(2.0*w_total_choice/(total_weight*total_weight)));
+                  currentRow.setValue(w_choice_col[r],float(w_total_choice));
+                  currentRow.setValue(nw_choice_col[r],float(2.0*w_total_choice/(total_weight*total_weight)));
                }
             }
             else {
-               m_attributes.setValue(i,choice_col[r],-1);
-               m_attributes.setValue(i,n_choice_col[r],-1);
+               currentRow.setValue(choice_col[r],-1);
+               currentRow.setValue(n_choice_col[r],-1);
                if (weighting_col != -1) {
-                  m_attributes.setValue(i,w_choice_col[r],-1);
-                  m_attributes.setValue(i,nw_choice_col[r],-1);
+                  currentRow.setValue(w_choice_col[r],-1);
+                  currentRow.setValue(nw_choice_col[r],-1);
                }
             }
          }
@@ -2719,7 +2723,7 @@ bool ShapeGraph::integrate(Communicator *comm, const pvecint& radius_list, bool 
 bool ShapeGraph::stepdepth(Communicator *comm)
 {
    std::string stepdepth_col_text = std::string("Step Depth");
-   int stepdepth_col = m_attributes.insertColumn(stepdepth_col_text.c_str());
+   int stepdepth_col = m_attributes.insertOrResetColumn(stepdepth_col_text.c_str());
 
    bool *covered = new bool [m_connectors.size()];
    for (size_t i = 0; i < m_connectors.size(); i++) {
