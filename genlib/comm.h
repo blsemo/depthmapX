@@ -145,7 +145,7 @@ public:
    const std::vector<std::string>& GetFileSet() const
    { return m_fileset; }
    //
-   virtual void CommPostMessage(int m, int x, int y = 0) const = 0; // Override for specific operating system
+   virtual void CommPostMessage(int m, int x) const = 0; // Override for specific operating system
 };
 
 // this is a simple version of the Communicator which can be used for
@@ -164,10 +164,10 @@ protected:
 public:
 	ICommunicator() { m_delete_flag = true; } // note: an ICommunicator lets IComm know that it should delete it
 	virtual ~ICommunicator() {;}
-   virtual void CommPostMessage(int m, int x, int y = 0) const;
+   virtual void CommPostMessage(int m, int x) const;
 };
 
-inline void ICommunicator::CommPostMessage(int m, int x, int y) const
+inline void ICommunicator::CommPostMessage(int m, int x) const
 {
 	switch (m) {
 		case Communicator::NUM_STEPS:
@@ -183,26 +183,12 @@ inline void ICommunicator::CommPostMessage(int m, int x, int y) const
 			record = x;
 			break;
         default:
-            y = 0;
             break;
     }
 }
 
 
 // a helpful little function...
-#ifdef _MSC_VER // MSVC compiler
-inline bool qtimer( __time64_t& t1, __time64_t timeout )
-{
-   /* static */ _timeb time2; // static removed for multithreaded usage
-   _ftime( &time2 );
-   __time64_t t2 = (time2.time % 100) * 1000 + time2.millitm;
-   if ((t2 - t1) > timeout || (t2 - t1) < 0) { // also catch a loop
-      t1 = t2;
-      return true;
-   }
-   return false;
-}
-#else
 inline bool qtimer( time_t& t1, time_t timeout )
 {
    /* static */ timeb time2; // static removed for multithreaded usage
@@ -214,6 +200,5 @@ inline bool qtimer( time_t& t1, time_t timeout )
    }
    return false;
 }
-#endif
 
 #endif

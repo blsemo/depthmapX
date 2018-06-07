@@ -20,9 +20,6 @@ SOURCES += \
     attributes.cpp \
     axialmap.cpp \
     connector.cpp \
-    datalayer.cpp \
-    idepthmap.cpp \
-    idepthmapx.cpp \
     isovist.cpp \
     MapInfoData.cpp \
     mgraph.cpp \
@@ -36,7 +33,6 @@ SOURCES += \
     sparksieve2.cpp \
     tigerp.cpp \
     topomet.cpp \
-    vertex.cpp \
     entityparsing.cpp \
     linkutils.cpp \
     gridproperties.cpp \
@@ -44,15 +40,15 @@ SOURCES += \
     layermanagerimpl.cpp \
     attributetableview.cpp \
     geometrygenerators.cpp \
-    importutils.cpp
+    importutils.cpp \
+    point.cpp \
+    pafcolor.cpp
 
 HEADERS += \
     attributes.h \
     axialmap.h \
     connector.h \
-    datalayer.h \
     fileproperties.h \
-    idepthmapx.h \
     isovist.h \
     MapInfoData.h \
     mgraph.h \
@@ -66,8 +62,6 @@ HEADERS += \
     sparksieve2.h \
     tigerp.h \
     topomet.h \
-    vertex.h \
-    idepthmap.h \
     entityparsing.h \
     linkutils.h \
     gridproperties.h \
@@ -81,7 +75,12 @@ HEADERS += \
     attributetableview.h \
     geometrygenerators.h \
     importutils.h \
-    importtypedefs.h
+    importtypedefs.h \
+    point.h \
+    pixelref.h \
+    displayparams.h \
+    pafcolor.h \
+    options.h
 
 DISTFILES += \
     salascript-tests.txt

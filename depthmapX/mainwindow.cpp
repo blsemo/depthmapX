@@ -80,7 +80,7 @@ MainWindow::MainWindow(const QString &fileToLoad, Settings &settings) : mSetting
     connect(windowMapper, SIGNAL(mapped(QWidget *)), this, SLOT(setActiveSubWindow(QWidget *)));
 
 
-    m_indexWidget = new indexWidget(this, false);
+    m_indexWidget = new IndexWidget(this);
     QDockWidget *indexDock = new QDockWidget(tr("Index"), this);
     indexDock->setObjectName(QLatin1String("IndexWindow"));
     indexDock->setWidget(m_indexWidget);
@@ -107,23 +107,7 @@ MainWindow::MainWindow(const QString &fileToLoad, Settings &settings) : mSetting
 
     if (fileToLoad.length()>0)
     {
-        MapView *child = createMapView();
-
-        QByteArray ba = fileToLoad.toUtf8(); // quick fix for weird chars (russian filename bug report)
-        char *file = ba.data(); // quick fix for weird chars (russian filename bug report)
-        if(child->getGraphDoc()->OnOpenDocument(file)) // quick fix for weird chars (russian filename bug report)
-        {
-             child->setCurrentFile(fileToLoad);
-             child->postLoadFile();
-             statusBar()->showMessage(tr("File loaded"), 2000);
-             child->show();
-             OnFocusGraph(child->getGraphDoc(), QGraphDoc::CONTROLS_LOADALL);
-             setCurrentFile(fileToLoad);
-        } else {
-             child->close();
-             QMessageBox::warning(this, "Failed to load", QString("Failed to load file ")+fileToLoad, QMessageBox::Ok, QMessageBox::Ok );
-        }
-
+        loadFile(fileToLoad);
     }
 }
 
@@ -181,6 +165,29 @@ void MainWindow::OnFileNew()
     OnFocusGraph(child->getGraphDoc(), QGraphDoc::CONTROLS_LOADALL);
 }
 
+void MainWindow::loadFile(QString fileName) {
+    QMdiSubWindow *existing = findMapView(fileName);
+    if (existing) {
+          mdiArea->setActiveSubWindow(existing);
+          return;
+    }
+    MapView *child = createMapView();
+    QByteArray ba = fileName.toUtf8(); // quick fix for weird chars (russian filename bug report)
+    char *file = ba.data(); // quick fix for weird chars (russian filename bug report)
+    if(child->getGraphDoc()->OnOpenDocument(file)) // quick fix for weird chars (russian filename bug report)
+    {
+         child->setCurrentFile(fileName);
+         child->postLoadFile();
+         statusBar()->showMessage(tr("File loaded"), 2000);
+         child->show();
+         OnFocusGraph(child->getGraphDoc(), QGraphDoc::CONTROLS_LOADALL);
+         setCurrentFile(fileName);
+    } else {
+         child->close();
+         QMessageBox::warning(this, "Failed to load", QString("Failed to load file ")+fileName, QMessageBox::Ok, QMessageBox::Ok );
+    }
+}
+
 void MainWindow::OnFileOpen()
 {
    QString template_string;
@@ -195,25 +202,7 @@ void MainWindow::OnFileOpen()
        &selectedFilter,
        options);
      if (!fileName.isEmpty()) {
-          QMdiSubWindow *existing = findMapView(fileName);
-          if (existing) {
-                mdiArea->setActiveSubWindow(existing);
-                return;
-          }
-          MapView *child = createMapView();
-          QByteArray ba = fileName.toUtf8(); // quick fix for weird chars (russian filename bug report)
-          char *file = ba.data(); // quick fix for weird chars (russian filename bug report)
-          if(child->getGraphDoc()->OnOpenDocument(file)) // quick fix for weird chars (russian filename bug report)
-          {
-               child->setCurrentFile(fileName);
-               child->postLoadFile();
-               statusBar()->showMessage(tr("File loaded"), 2000);
-               child->show();
-               OnFocusGraph(child->getGraphDoc(), QGraphDoc::CONTROLS_LOADALL);
-               setCurrentFile(fileName);
-          } else {
-               child->close();
-          }
+          loadFile(fileName);
      }
 }
 
@@ -640,16 +629,6 @@ void MainWindow::OnToolsOptions()
     if(QDialog::Accepted == dialog.exec()) {
         readSettings();
     }
-}
-
-void MainWindow::OnShowResearchtoolbar()
-{
-    //if (GetApp()->m_show_researchtoolbar) {
-    //	m_wndResearchToolBar.show();
-    //}
-    //else {
-    //	m_wndResearchToolBar.hide();
-    //}
 }
 
 void MainWindow::OnViewCentreView()
@@ -1152,14 +1131,6 @@ void MainWindow::updateGLWindows(bool datasetChanged, bool recentreView) {
     }
 }
 
-void MainWindow::switchLayoutDirection()
-{
-    if (layoutDirection() == Qt::LeftToRight)
-        qApp->setLayoutDirection(Qt::RightToLeft);
-    else
-        qApp->setLayoutDirection(Qt::LeftToRight);
-}
-
 void MainWindow::setActiveSubWindow(QWidget *win)
 {
     if (!win) return;
@@ -1220,6 +1191,11 @@ int MainWindow::OnFocusGraph(QGraphDoc* pDoc, int lParam)
         MakeGraphTree();
     }
     else if (lParam == QGraphDoc::CONTROLS_LOADDRAWING && pDoc == m_treeDoc) {     // Force update if match current window
+        m_backgraph = NULL;
+        m_attrWindow->clear();
+        m_indexWidget->clear();
+        ClearGraphTree();
+        MakeGraphTree();
         MakeDrawingTree();
     }
     else if (lParam == QGraphDoc::CONTROLS_LOADATTRIBUTES && pDoc == m_treeDoc) {     // Force update if match current window
@@ -1286,7 +1262,7 @@ void MainWindow::OnSelchangingList()
       }
       m_treeDoc->SetRedrawFlag(QGraphDoc::VIEW_ALL, QGraphDoc::REDRAW_GRAPH, QGraphDoc::NEW_FOCUS );
       SetAttributeChecks();
-	  OnFocusGraph(m_treeDoc, QGraphDoc::CONTROLS_CHANGEATTRIBUTE); // Bug Test TV
+      OnFocusGraph(m_treeDoc, QGraphDoc::CONTROLS_CHANGEATTRIBUTE); // Bug Test TV
    }
 
    // this *does* work here (but only if they click on a valid attribute):
@@ -1300,12 +1276,12 @@ void MainWindow::OnSelchangingTree(QTreeWidgetItem* hItem, int col)
     bool update = false;
 
     // look it up in the table to see what to do:
-    size_t n = m_treegraphmap.searchindex(hItem);
-    if (n != paftl::npos) {
-        ItemTreeEntry entry = m_treegraphmap.value(n);
+    auto iter = m_treegraphmap.find(hItem);
+    if (iter != m_treegraphmap.end()) {
+        ItemTreeEntry entry = iter->second;
         bool remenu = false;
         if (entry.m_cat != -1) {
-            if (entry.m_subcat == -1) {
+            if (entry.m_subcat == -1 && m_indexWidget->isMapColumn(col)) {
                 switch (entry.m_type) {
                 case 0:
                     if (graph->getViewClass() & MetaGraph::VIEWVGA) {
@@ -1339,15 +1315,15 @@ void MainWindow::OnSelchangingTree(QTreeWidgetItem* hItem, int col)
                     break;
                 case 2:
                    if (graph->getViewClass() & MetaGraph::VIEWDATA) {
-                      if (graph->getDataMaps().getDisplayedMapRef() == entry.m_cat) {
+                      if (graph->getDisplayedDataMapRef() == entry.m_cat) {
                          graph->setViewClass(MetaGraph::SHOWHIDESHAPE);
                       }
                       else {
-                         graph->getDataMaps().setDisplayedMapRef(entry.m_cat);
+                         graph->setDisplayedDataMapRef(entry.m_cat);
                       }
                    }
                    else {
-                      graph->getDataMaps().setDisplayedMapRef(entry.m_cat);
+                      graph->setDisplayedDataMapRef(entry.m_cat);
                       graph->setViewClass(MetaGraph::SHOWSHAPETOP);
                    }
                     remenu = true;
@@ -1363,17 +1339,17 @@ void MainWindow::OnSelchangingTree(QTreeWidgetItem* hItem, int col)
                 }
                 m_treeDoc->SetRedrawFlag(QGraphDoc::VIEW_ALL, QGraphDoc::REDRAW_GRAPH, QGraphDoc::NEW_TABLE );
             }
-            else if (entry.m_subcat == -2) {
+            else if (entry.m_subcat == -1 && m_indexWidget->isEditableColumn(col)) {
                 // hit editable box
                 if (entry.m_type == 1) {
                     int type = graph->getShapeGraphs().getMap(entry.m_cat).getMapType();
                     if (type != ShapeMap::SEGMENTMAP && type != ShapeMap::ALLLINEMAP) {
-                        graph->getShapeGraphs().getMap(entry.m_cat).setEditable(hItem->checkState(0));
+                        graph->getShapeGraphs().getMap(entry.m_cat).setEditable(m_indexWidget->isItemSetEditable(hItem));
                         update = true;
                     }
                 }
                 if (entry.m_type == 2) {
-                    graph->getDataMaps().getMap(entry.m_cat).setEditable(hItem->checkState(0));
+                    graph->getDataMaps()[entry.m_cat].setEditable(m_indexWidget->isItemSetEditable(hItem));
                     update = true;
                 }
                 if (update) {
@@ -1386,11 +1362,11 @@ void MainWindow::OnSelchangingTree(QTreeWidgetItem* hItem, int col)
                 // They've clicked on the displayed layers
                 if (entry.m_type == 1) {
                    update = true;
-                   graph->getShapeGraphs().getMap(entry.m_cat).setLayerVisible(entry.m_subcat, hItem->checkState(0));
+                   graph->getShapeGraphs().getMap(entry.m_cat).setLayerVisible(entry.m_subcat, m_indexWidget->isItemSetVisible(hItem));
                 }
                 else if (entry.m_type == 2) {
                    update = true;
-                   graph->getDataMaps().getMap(entry.m_cat).setLayerVisible(entry.m_subcat, hItem->checkState(0));
+                   graph->getDataMaps()[entry.m_cat].setLayerVisible(entry.m_subcat, m_indexWidget->isItemSetVisible(hItem));
                 }
                 if (update) {
                     m_treeDoc->SetRedrawFlag(QGraphDoc::VIEW_ALL, QGraphDoc::REDRAW_GRAPH, QGraphDoc::NEW_TABLE );
@@ -1400,18 +1376,18 @@ void MainWindow::OnSelchangingTree(QTreeWidgetItem* hItem, int col)
         }
     }
     else {
-        size_t n = m_treedrawingmap.searchindex(hItem);
-        if (n != paftl::npos) {
-            ItemTreeEntry entry = m_treedrawingmap.value(n);
+        auto iter = m_treedrawingmap.find(hItem);
+        if (iter != m_treedrawingmap.end()) {
+            ItemTreeEntry entry = iter->second;
             if (entry.m_subcat != -1) {
                 if (graph->getLineLayer(entry.m_cat,entry.m_subcat).isShown()) {
                     graph->getLineLayer(entry.m_cat,entry.m_subcat).setShow(false);
-                    graph->PointMaps::redoBlockLines();
+                    graph->redoPointMapBlockLines();
                     graph->resetBSPtree();
                 }
                 else {
                     graph->getLineLayer(entry.m_cat,entry.m_subcat).setShow(true);
-                    graph->PointMaps::redoBlockLines();
+                    graph->redoPointMapBlockLines();
                     graph->resetBSPtree();
                 }
             }
@@ -1425,9 +1401,9 @@ void MainWindow::SetGraphTreeChecks()
     in_FocusGraph = true;
     MetaGraph *graph = m_treeDoc->m_meta_graph;
     int viewclass = graph->getViewClass();
-    for (size_t i = 0; i < m_treegraphmap.size(); i++) {
-        QTreeWidgetItem* key = m_treegraphmap.key(i);
-        ItemTreeEntry entry = m_treegraphmap[i];
+    for (auto item: m_treegraphmap) {
+        QTreeWidgetItem* key = item.first;
+        ItemTreeEntry entry = item.second;
         int checkstyle = 7;
         if (entry.m_cat != -1) {
             if (entry.m_subcat == -1) {
@@ -1454,26 +1430,29 @@ void MainWindow::SetGraphTreeChecks()
                         }
                         break;
                     case 2:
-                        if (viewclass & MetaGraph::VIEWDATA && graph->getDataMaps().getDisplayedMapRef() == entry.m_cat) {
+                        if (viewclass & MetaGraph::VIEWDATA && graph->getDisplayedDataMapRef() == entry.m_cat) {
                             checkstyle = 5;
                             m_topgraph = key;
                         }
-                        else if (viewclass & MetaGraph::VIEWBACKDATA && graph->getDataMaps().getDisplayedMapRef() == entry.m_cat) {
+                        else if (viewclass & MetaGraph::VIEWBACKDATA && graph->getDisplayedDataMapRef() == entry.m_cat) {
                             checkstyle = 6;
                             m_backgraph = key;
                         }
                         break;
                 }
-                if(checkstyle == 5) key->setCheckState(0, Qt::Checked);
-                else if(checkstyle == 6) key->setCheckState(0, Qt::PartiallyChecked);
-                else if(checkstyle == 7) key->setCheckState(0, Qt::Unchecked);
-            }
-            else if (entry.m_subcat == -2) {
+
+                if(checkstyle == 5)
+                    m_indexWidget->setItemVisibility(key, Qt::Checked);
+                else if(checkstyle == 6)
+                    m_indexWidget->setItemVisibility(key, Qt::PartiallyChecked);
+                else if(checkstyle == 7)
+                    m_indexWidget->setItemVisibility(key, Qt::Unchecked);
+
                 // the editable box
                 int editable = MetaGraph::NOT_EDITABLE;
                 switch (entry.m_type) {
                     case 0:
-                        if (graph->PointMaps::at(entry.m_cat).isProcessed()) {
+                        if (graph->getPointMaps()[entry.m_cat].isProcessed()) {
                             editable = MetaGraph::NOT_EDITABLE;
                         }
                         else {
@@ -1492,20 +1471,18 @@ void MainWindow::SetGraphTreeChecks()
                         }
                         break;
                     case 2:
-                        editable = graph->getDataMaps().getMap(entry.m_cat).isEditable() ? MetaGraph::EDITABLE_ON : MetaGraph::EDITABLE_OFF;
+                        editable = graph->getDataMaps()[entry.m_cat].isEditable() ? MetaGraph::EDITABLE_ON : MetaGraph::EDITABLE_OFF;
                         break;
                 }
                 switch (editable) {
                     case MetaGraph::NOT_EDITABLE:
-                        key->setFlags(0);
+                        m_indexWidget->setItemReadOnly(key);
                         break;
                     case MetaGraph::EDITABLE_OFF:
-                        key->setCheckState(0, Qt::Unchecked);
-                        key->setText(0, editstatetext[2]);
+                        m_indexWidget->setItemEditability(key, Qt::Unchecked);
                         break;
                     case MetaGraph::EDITABLE_ON:
-                        key->setCheckState(0, Qt::Checked);
-                        key->setText(0, editstatetext[2]);
+                        m_indexWidget->setItemEditability(key, Qt::Checked);
                     break;
                 }
             }
@@ -1517,13 +1494,13 @@ void MainWindow::SetGraphTreeChecks()
                     show = graph->getShapeGraphs().getMap(entry.m_cat).isLayerVisible(entry.m_subcat);
                 }
                 else if (entry.m_type == 2) {
-                    show = graph->getDataMaps().getMap(entry.m_cat).isLayerVisible(entry.m_subcat);
+                    show = graph->getDataMaps()[entry.m_cat].isLayerVisible(entry.m_subcat);
                 }
                 if (show) {
-                      key->setCheckState(0, Qt::Checked);
+                      m_indexWidget->setItemVisibility(key, Qt::Checked);
                 }
                 else {
-                      key->setCheckState(0, Qt::Unchecked);
+                      m_indexWidget->setItemVisibility(key, Qt::Unchecked);
                 }
             }
         }
@@ -1536,14 +1513,14 @@ void MainWindow::SetDrawingTreeChecks()
 {
     MetaGraph *graph = m_treeDoc->m_meta_graph;
     int viewclass = graph->getViewClass();
-    for (size_t i = 0; i < m_treedrawingmap.size(); i++) {
-        ItemTreeEntry entry = m_treedrawingmap[i];
+    for (auto iter: m_treedrawingmap) {
+        ItemTreeEntry entry = iter.second;
         if (entry.m_subcat != -1) {
             if (graph->getLineLayer(entry.m_cat,entry.m_subcat).isShown()) {
-                  m_treedrawingmap.key(i)->setIcon(0, m_tree_icon[12]);
+                  iter.first->setIcon(0, m_tree_icon[12]);
             }
             else {
-                  m_treedrawingmap.key(i)->setIcon(0, m_tree_icon[13]);
+                  iter.first->setIcon(0, m_tree_icon[13]);
             }
         }
     }
@@ -1568,149 +1545,104 @@ void MainWindow::MakeGraphTree()
     MetaGraph *graph = m_treeDoc->m_meta_graph;
 
     int state = graph->getState();
-    int viewclass = graph->getViewClass();
 
     if (state & MetaGraph::POINTMAPS) {
         if (!m_treeroots[0]) {
-            QTreeWidgetItem* hItem = m_indexWidget->addNewRootFolder(tr("Visibility Graphs"));
+            QTreeWidgetItem* hItem = m_indexWidget->addNewItem(tr("Visibility Graphs"));
             hItem->setIcon(0, m_tree_icon[0]);
             ItemTreeEntry entry(0,-1,-1);
-            m_treegraphmap.add(hItem, entry);
+            m_treegraphmap[hItem] = entry;
             m_treeroots[0] = hItem;
         }
-        QTreeWidgetItem* hItem = m_treeroots[0]->child(0);
-        for (size_t i = 0; i < m_treeDoc->m_meta_graph->PointMaps::size(); i++) {
-            QString name = QString(m_treeDoc->m_meta_graph->PointMaps::at(i).getName().c_str());
-            if (hItem == NULL) {
-                hItem = m_indexWidget->addNewFolder(name, m_treeroots[0]);
-                hItem->setCheckState(0, Qt::Unchecked);
-                ItemTreeEntry entry(0,(short)i,-1);
-                m_treegraphmap.add(hItem,entry);
-                {
-                    QTreeWidgetItem* hNewItem = m_indexWidget->addNewItem("Editable", 0);
-                    hNewItem->setCheckState(0, Qt::Unchecked);
-                    ItemTreeEntry newentry = ItemTreeEntry(0,(short)i,-2);
-                    m_treegraphmap.add(hNewItem, newentry);
-                }
-            }
-            else if (hItem->text(0) != name) hItem->setText(0, name);
-            hItem = hItem->child(1);
-        }
-        while (hItem != NULL)
-        {
-            QTreeWidgetItem* hItemDestroy = hItem;
-            hItem = hItemDestroy->child(0);
-            hItemDestroy->removeChild(hItemDestroy);
+        int i = 0;
+        for (auto& pointmap: m_treeDoc->m_meta_graph->getPointMaps()) {
+            QString name = QString(pointmap.getName().c_str());
+            QTreeWidgetItem* hItem = m_indexWidget->addNewItem(name, m_treeroots[0]);
+            m_indexWidget->setItemVisibility(hItem, Qt::Unchecked);
+            m_indexWidget->setItemEditability(hItem, Qt::Unchecked);
+            ItemTreeEntry entry(0,(short)i,-1);
+            m_treegraphmap.insert(std::make_pair(hItem,entry));
+            i++;
         }
     }
     else if (m_treeroots[0]) {
         m_treeroots[0]->removeChild(m_treeroots[0]);
-        m_treegraphmap.remove(m_treeroots[0]);
+        auto iter = m_treegraphmap.find(m_treeroots[0]);
+        if(iter != m_treegraphmap.end()) {
+            m_treegraphmap.erase(iter);
+        }
         m_treeroots[0] = NULL;
     }
 
     if (state & MetaGraph::SHAPEGRAPHS) {
         if (!m_treeroots[1]) {
-            QTreeWidgetItem* hItem = m_indexWidget->addNewRootFolder(tr("Shape Graphs"));
+            QTreeWidgetItem* hItem = m_indexWidget->addNewItem(tr("Shape Graphs"));
             hItem->setIcon(0, m_tree_icon[1]);
             ItemTreeEntry entry(1,-1,-1);
-            m_treegraphmap.add(hItem, entry);
+            m_treegraphmap[hItem] = entry;
             m_treeroots[1] = hItem;
         }
-        QTreeWidgetItem* hItem = m_treeroots[1]->child(0);
         for (size_t i = 0; i < m_treeDoc->m_meta_graph->getShapeGraphs().getMapCount(); i++) {
             QString name = QString(m_treeDoc->m_meta_graph->getShapeGraphs().getMap(i).getName().c_str());
-            if (hItem == NULL) {
-                hItem = m_indexWidget->addNewFolder(name, m_treeroots[1]);
-                hItem->setCheckState(0, Qt::Unchecked);
-                ItemTreeEntry entry(1,(short)i,-1);
-                m_treegraphmap.add(hItem,entry);
-                {
-                    QTreeWidgetItem* hNewItem = m_indexWidget->addNewItem("Editable", 0);
-                    hNewItem->setCheckState(0, Qt::Unchecked);
-                    ItemTreeEntry newentry = ItemTreeEntry(1,(short)i,-2);
-                    m_treegraphmap.add(hNewItem, newentry);
-                }
-            }
-            else if (hItem->text(0) != name) hItem->setText(0, name);
-            QTreeWidgetItem* hNewItem = hItem->child(0);
+            QTreeWidgetItem* hItem = m_indexWidget->addNewItem(name, m_treeroots[1]);
+            m_indexWidget->setItemVisibility(hItem, Qt::Unchecked);
+            m_indexWidget->setItemEditability(hItem, Qt::Unchecked);
+            ItemTreeEntry entry(1,(short)i,-1);
+            m_treegraphmap.insert(std::make_pair(hItem,entry));
             AttributeTable& table = m_treeDoc->m_meta_graph->getShapeGraphs().getMap(i).getAttributeTable();
-            for (int j = 0; j < table.getLayerCount(); j++) {
-                QString name = QString(table.getLayerName(j).c_str());
-                if (hNewItem == NULL) {
-                    hNewItem = m_indexWidget->addNewItem(name, 0);
+            if(table.getLayerCount() > 1) {
+                for (int j = 0; j < table.getLayerCount(); j++) {
+                    QString name = QString(table.getLayerName(j).c_str());
+                    QTreeWidgetItem* hNewItem = m_indexWidget->addNewItem(name, hItem);
                     ItemTreeEntry entry(1,(short)i,j);
-                    m_treegraphmap.add(hNewItem,entry);
+                    m_treegraphmap[hNewItem] = entry;
                 }
-                else if (hNewItem->text(0) != name) hNewItem->setText(0, name);
-                hNewItem = hNewItem->child(1);
             }
-            hItem = hNewItem;
-        }
-        while (hItem != NULL)
-        {
-            QTreeWidgetItem* hItemDestroy = hItem;
-            hItem = hItemDestroy->child(0);
-            hItemDestroy->removeChild(hItemDestroy);
         }
     }
     else if (m_treeroots[1]) {
         m_treeroots[1]->removeChild(m_treeroots[1]);
-        m_treegraphmap.remove(m_treeroots[1]);
+        auto iter = m_treegraphmap.find(m_treeroots[1]);
+        if(iter != m_treegraphmap.end()) {
+            m_treegraphmap.erase(iter);
+        }
         m_treeroots[1] = NULL;
     }
 
     if (state & MetaGraph::DATAMAPS) {
         if (!m_treeroots[2]) {
-            QTreeWidgetItem* hItem = m_indexWidget->addNewRootFolder(tr("Data Maps"));
+            QTreeWidgetItem* hItem = m_indexWidget->addNewItem(tr("Data Maps"));
             hItem->setIcon(0, m_tree_icon[2]);
             ItemTreeEntry entry(2,-1,-1);
-            m_treegraphmap.add(hItem, entry);
+            m_treegraphmap[hItem] = entry;
             m_treeroots[2] = hItem;
         }
-        QTreeWidgetItem* hItem = m_treeroots[2]->child(0);
-        for (size_t i = 0; i < m_treeDoc->m_meta_graph->getDataMaps().getMapCount(); i++) {
-            QString name = QString(m_treeDoc->m_meta_graph->getDataMaps().getMap(i).getName().c_str());
-            if (hItem == NULL)
-            {
-                hItem = m_indexWidget->addNewFolder(name, m_treeroots[2]);
-                hItem->setCheckState(0, Qt::Unchecked);
-                ItemTreeEntry entry(2,(short)i,-1);
-                m_treegraphmap.add(hItem, entry);
-                {
-                    hItem = m_indexWidget->addNewItem(tr("Editable"), 0);
-                    hItem->setCheckState(0, Qt::Unchecked);
-                    ItemTreeEntry newentry = ItemTreeEntry(2,(short)i,-2);
-                    m_treegraphmap.add(hItem, newentry);
-                }
-            }
-            else if (hItem->text(0) != name) hItem->setText(0, name);
+        for (size_t i = 0; i < m_treeDoc->m_meta_graph->getDataMaps().size(); i++) {
+            QString name = QString(m_treeDoc->m_meta_graph->getDataMaps()[i].getName().c_str());
+            QTreeWidgetItem* hItem = m_indexWidget->addNewItem(name, m_treeroots[2]);
+            m_indexWidget->setItemVisibility(hItem, Qt::Unchecked);
+            m_indexWidget->setItemEditability(hItem, Qt::Unchecked);
+            ItemTreeEntry entry(2,(short)i,-1);
+            m_treegraphmap[hItem] = entry;
 
-            QTreeWidgetItem* hNewItem = hItem->child(0);
-            AttributeTable& table = m_treeDoc->m_meta_graph->getDataMaps().getMap(i).getAttributeTable();
-            for (int j = 0; j < table.getLayerCount(); j++) {
-                QString name = QString(table.getLayerName(j).c_str());
-                if (hNewItem == NULL) {
-                    hNewItem = m_indexWidget->addNewItem(name, 0);
-                    hNewItem->setCheckState(0, Qt::Unchecked);
+            AttributeTable& table = m_treeDoc->m_meta_graph->getDataMaps()[i].getAttributeTable();
+            if(table.getLayerCount() > 1) {
+                for (int j = 0; j < table.getLayerCount(); j++) {
+                    QString name = QString(table.getLayerName(j).c_str());
+                    QTreeWidgetItem* hNewItem = m_indexWidget->addNewItem(name, hItem);
+                    m_indexWidget->setItemVisibility(hNewItem, Qt::Unchecked);
                     ItemTreeEntry entry(2,(short)i,j);
-                    m_treegraphmap.add(hNewItem,entry);
+                    m_treegraphmap.insert(std::make_pair(hNewItem,entry));
                 }
-                else if (hNewItem->text(0) != name) hNewItem->setText(0, name);
-                hNewItem = hNewItem->child(0);
             }
-            hItem = hNewItem;
-        }
-        while (hItem != NULL)
-        {
-            QTreeWidgetItem* hItemDestroy = hItem;
-            hItem = hItemDestroy->child(0);
-            hItemDestroy->removeChild(hItemDestroy);
         }
     }
     else if (m_treeroots[2]) {
         m_treeroots[2]->removeChild(m_treeroots[2]);
-        m_treegraphmap.remove(m_treeroots[2]);
+        auto iter = m_treegraphmap.find(m_treeroots[2]);
+        if(iter != m_treegraphmap.end()) {
+            m_treegraphmap.erase(iter);
+        }
         m_treeroots[2] = NULL;
     }
 
@@ -1729,29 +1661,29 @@ void MainWindow::MakeDrawingTree()
             m_treedrawingmap.clear();
         }
         // we'll do all of these if it works...
-        QTreeWidgetItem* root = m_indexWidget->addNewRootFolder(tr("Drawing Layers"));
+        QTreeWidgetItem* root = m_indexWidget->addNewItem(tr("Drawing Layers"));
         root->setIcon(0, m_tree_icon[4]);
         ItemTreeEntry entry(4,0,-1);
-        m_treedrawingmap.add(root,entry);
+        m_treedrawingmap.insert(std::make_pair(root,entry));
         m_treeroots[4] = root;
         for (int i = 0; i < m_treeDoc->m_meta_graph->getLineFileCount(); i++) {
 
-            QTreeWidgetItem* subroot = m_indexWidget->addNewFolder(QString(m_treeDoc->m_meta_graph->getLineFileName(i).c_str()));
+            QTreeWidgetItem* subroot = m_indexWidget->addNewItem(QString(m_treeDoc->m_meta_graph->getLineFileName(i).c_str()), m_treeroots[4]);
             subroot->setIcon(0, m_tree_icon[8]);
             ItemTreeEntry entry(4,i,-1);
-            m_treedrawingmap.add(subroot,entry);
+            m_treedrawingmap.insert(std::make_pair(subroot,entry));
 
             for (int j = 0; j < m_treeDoc->m_meta_graph->getLineLayerCount(i); j++) {
                 QString name(m_treeDoc->m_meta_graph->getLineLayer(i,j).getName().c_str());
-                QTreeWidgetItem* hItem = m_indexWidget->addNewItem(name, 0);
+                QTreeWidgetItem* hItem = m_indexWidget->addNewItem(name, subroot);
                 if (m_treeDoc->m_meta_graph->getLineLayer(i,j).isShown()) {
-                    hItem->setCheckState(0, Qt::Checked);
+                    m_indexWidget->setItemVisibility(hItem, Qt::Checked);
                 }
                 else {
-                    hItem->setCheckState(0, Qt::Unchecked);
+                    m_indexWidget->setItemVisibility(hItem, Qt::Unchecked);
                 }
                 ItemTreeEntry entry(4,i,j);
-                m_treedrawingmap.add(hItem,entry);
+                m_treedrawingmap.insert(std::make_pair(hItem,entry));
             }
         }
     }
@@ -1763,7 +1695,8 @@ void MainWindow::MakeAttributeList()
     if (graph == NULL) {
         return;
     }
-    if (graph->setLock(this)) {
+    auto lock = graph->getLockDeferred();
+    if (lock.try_lock()) {
 
         // just doing this the simple way to start off with
         // (when you add new attributes, list is cleared and re
@@ -1784,7 +1717,6 @@ void MainWindow::MakeAttributeList()
                 //}
             }
         }
-        graph->releaseLock(this);
     }
 
     SetAttributeChecks();
@@ -2236,58 +2168,62 @@ void MainWindow::RedoPlotViewMenu(QGraphDoc* pDoc)
    int view_class = pDoc->m_meta_graph->getViewClass() & (MetaGraph::VIEWVGA | MetaGraph::VIEWAXIAL | MetaGraph::VIEWDATA);
    int curr_j = 0;
 
-   if (pDoc->m_meta_graph->setLock(this)) {
-      m_view_map_entries.clear();
-      if (view_class == MetaGraph::VIEWVGA) {
-         PointMap& map = pDoc->m_meta_graph->getDisplayedPointMap();
-         int displayed_ref = map.getDisplayedAttribute();
+   {
+       auto lock = pDoc->m_meta_graph->getLockDeferred();
+       if (lock.try_lock()) {
+          m_view_map_entries.clear();
+          if (view_class == MetaGraph::VIEWVGA) {
+             PointMap& map = pDoc->m_meta_graph->getDisplayedPointMap();
+             int displayed_ref = map.getDisplayedAttribute();
 
-         const AttributeTable& table = map.getAttributeTable();
-         m_view_map_entries.add(0, "Ref Number");
-         for (int i = 0; i < table.getColumnCount(); i++) {
-            m_view_map_entries.add(i+1, table.getColumnName(i));
-            if (map.getDisplayedAttribute() == i) {
-               curr_j = i + 1;
-            }
-         }
-      }
-      else if (view_class == MetaGraph::VIEWAXIAL) {
-         // using attribute tables is very, very simple...
-         const ShapeGraph& map = pDoc->m_meta_graph->getDisplayedShapeGraph();
-         const AttributeTable& table = map.getAttributeTable();
-         m_view_map_entries.add(0, "Ref Number");
-         curr_j = 0;
-         for (int i = 0; i < table.getColumnCount(); i++) {
-            m_view_map_entries.add(i+1, table.getColumnName(i));
-            if (map.getDisplayedAttribute() == i) {
-               curr_j = i + 1;
-            }
-         }
-      }
-      else if (view_class == MetaGraph::VIEWDATA) {
-         // using attribute tables is very, very simple...
-         const ShapeMap& map = pDoc->m_meta_graph->getDisplayedDataMap();
-         const AttributeTable& table = map.getAttributeTable();
-         m_view_map_entries.add(0, "Ref Number");
-         curr_j = 0;
-         for (int i = 0; i < table.getColumnCount(); i++) {
-            m_view_map_entries.add(i+1, table.getColumnName(i));
-            if (map.getDisplayedAttribute() == i) {
-               curr_j = i + 1;
-            }
-         }
-      }
-      pDoc->m_meta_graph->releaseLock(this);
-   }
+             const AttributeTable& table = map.getAttributeTable();
+             m_view_map_entries.insert(std::make_pair(0, "Ref Number"));
+             for (int i = 0; i < table.getColumnCount(); i++) {
+                m_view_map_entries.insert(std::make_pair(i+1, table.getColumnName(i)));
+                if (map.getDisplayedAttribute() == i) {
+                   curr_j = i + 1;
+                }
+             }
+          }
+          else if (view_class == MetaGraph::VIEWAXIAL) {
+             // using attribute tables is very, very simple...
+             const ShapeGraph& map = pDoc->m_meta_graph->getDisplayedShapeGraph();
+             const AttributeTable& table = map.getAttributeTable();
+             m_view_map_entries.insert(std::make_pair(0, "Ref Number"));
+             curr_j = 0;
+             for (int i = 0; i < table.getColumnCount(); i++) {
+                m_view_map_entries.insert(std::make_pair(i+1, table.getColumnName(i)));
+                if (map.getDisplayedAttribute() == i) {
+                   curr_j = i + 1;
+                }
+             }
+          }
+          else if (view_class == MetaGraph::VIEWDATA) {
+             // using attribute tables is very, very simple...
+             const ShapeMap& map = pDoc->m_meta_graph->getDisplayedDataMap();
+             const AttributeTable& table = map.getAttributeTable();
+             m_view_map_entries.insert(std::make_pair(0, "Ref Number"));
+             curr_j = 0;
+             for (int i = 0; i < table.getColumnCount(); i++) {
+                m_view_map_entries.insert(std::make_pair(i+1, table.getColumnName(i)));
+                if (map.getDisplayedAttribute() == i) {
+                   curr_j = i + 1;
+                }
+             }
+          }
+       }
+    }
 
    int t, cur_sel = 0;
    x_coord->clear();
    y_coord->clear();
 
-   for (size_t i = 0; i < m_view_map_entries.size(); i++) {
-      if (curr_j == m_view_map_entries.key(i)) cur_sel = (int) i;
-      x_coord->addItem( QString(m_view_map_entries.value(i).c_str()) );
-      y_coord->addItem( QString(m_view_map_entries.value(i).c_str()) );
+   int i = 0;
+   for (auto view_map_entry: m_view_map_entries) {
+      if (curr_j == view_map_entry.first) cur_sel = i;
+      x_coord->addItem( QString(view_map_entry.second.c_str()) );
+      y_coord->addItem( QString(view_map_entry.second.c_str()) );
+      i++;
    }
 
    t = ((QPlotView*)pDoc->m_view[QGraphDoc::VIEW_SCATTER])->curr_y;
@@ -2803,7 +2739,8 @@ void MainWindow::updateToolbar()
     {
         importAct->setEnabled(true);
         saveAct->setEnabled(true);
-        addColumAct->setEnabled(true);
+        if(m_p->m_meta_graph->getDisplayedMapRef() != -1)
+            addColumAct->setEnabled(true);
         SelectButton->setEnabled(true);
         DragButton->setEnabled(true);
         RecentAct->setEnabled(true);

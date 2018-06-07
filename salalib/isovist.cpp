@@ -52,12 +52,12 @@ void Isovist::makeit(BSPNode *root, const Point2f& p, const QtRegion& region, do
    bool parity = false;
 
    if (startangle > endangle) {
-      m_gaps.push_back(IsoSeg(0.0,endangle));
-      m_gaps.push_back(IsoSeg(startangle,2.0*M_PI));
+      m_gaps.insert(IsoSeg(0.0,endangle));
+      m_gaps.insert(IsoSeg(startangle,2.0*M_PI));
    }
    else {
       parity = true;
-      m_gaps.push_back(IsoSeg(startangle,endangle));
+      m_gaps.insert(IsoSeg(startangle,endangle));
    }
 
    make(root);
@@ -69,30 +69,33 @@ void Isovist::makeit(BSPNode *root, const Point2f& p, const QtRegion& region, do
    m_occlusion_points.clear();
 
    bool markedcentre = false;
-   for (size_t i = 0; i < m_blocks.size(); i++) {
-      if (!complete && !markedcentre && !parity && m_blocks[i].startangle == startangle) {
+   auto prev = m_blocks.begin();
+   auto curr = m_blocks.begin();
+   for (;curr != m_blocks.end(); ++curr){
+      if (!complete && !markedcentre && !parity && curr->startangle == startangle) {
          // centre
          m_poly.push_back(p);
          // perimeter! occlusivity!
          markedcentre = true;
       }
-      if (i != 0 && !approxeq(m_blocks[i-1].endpoint, m_blocks[i].startpoint, tolerance)) {
-         m_poly.push_back(m_blocks[i].startpoint);
+      if (curr != m_blocks.begin() && !approxeq(prev->endpoint, curr->startpoint, tolerance)) {
+         m_poly.push_back(curr->startpoint);
          // record perimeter information:
-         double occluded = dist(m_blocks[i-1].endpoint,m_blocks[i].startpoint);
+         double occluded = dist(prev->endpoint,curr->startpoint);
          m_perimeter += occluded;
          m_occluded_perimeter += occluded;
          // record the near *point* for use in agent analysis
          // (as the point will not move between isovists, so can record *which* occlusion this is, and spot novel ones)
-         if (dist(m_blocks[i-1].endpoint,m_centre) < dist(m_blocks[i].startpoint,m_centre)) {
-            m_occlusion_points.push_back(PointDist(m_blocks[i-1].endpoint,occluded));
+         if (dist(prev->endpoint,m_centre) < dist(curr->startpoint,m_centre)) {
+            m_occlusion_points.push_back(PointDist(prev->endpoint,occluded));
          }
          else {
-            m_occlusion_points.push_back(PointDist(m_blocks[i].startpoint,occluded));
+            m_occlusion_points.push_back(PointDist(curr->startpoint,occluded));
          }
       }
-      m_poly.push_back(m_blocks[i].endpoint);
-      m_perimeter += dist(m_blocks[i].startpoint,m_blocks[i].endpoint);
+      m_poly.push_back(curr->endpoint);
+      m_perimeter += dist(curr->startpoint,curr->endpoint);
+      prev = curr;
    }
    // for some reason to do with ordering, if parity is true, the centre point must be last not first
    if (!complete && parity) {
@@ -100,20 +103,20 @@ void Isovist::makeit(BSPNode *root, const Point2f& p, const QtRegion& region, do
       m_poly.push_back(p);
       // perimeter! occlusivity!
    }
-   if (m_blocks.size() && !approxeq(m_blocks.tail().endpoint, m_blocks.head().startpoint, tolerance)) {
-      m_poly.push_back(m_blocks.head().startpoint);
+   if (m_blocks.size() && !approxeq(m_blocks.rbegin()->endpoint, m_blocks.begin()->startpoint, tolerance)) {
+      m_poly.push_back(m_blocks.begin()->startpoint);
       // record perimeter information:
-      double occluded = dist(m_blocks.tail().endpoint,m_blocks.head().startpoint);
+      double occluded = dist(m_blocks.rbegin()->endpoint,m_blocks.begin()->startpoint);
       m_perimeter += occluded;
       m_occluded_perimeter += occluded;
       // record the near *point* for use in agent analysis
       // (as the point will not move between isovists, so can record *which* occlusion this is, and spot novel ones)
       if (occluded > 1.5) {
-         if (dist(m_blocks.tail().endpoint,m_centre) < dist(m_blocks.head().startpoint,m_centre)) {
-            m_occlusion_points.push_back(PointDist(m_blocks.tail().endpoint,occluded));
+         if (dist(m_blocks.rbegin()->endpoint,m_centre) < dist(m_blocks.begin()->startpoint,m_centre)) {
+            m_occlusion_points.push_back(PointDist(m_blocks.rbegin()->endpoint,occluded));
          }
          else {
-            m_occlusion_points.push_back(PointDist(m_blocks.head().startpoint,occluded));
+            m_occlusion_points.push_back(PointDist(m_blocks.begin()->startpoint,occluded));
          }
       }
    }
@@ -125,18 +128,18 @@ int Isovist::getClosestLine(BSPNode *root, const Point2f& p)
    m_blocks.clear();
    m_gaps.clear();
 
-   m_gaps.push_back(IsoSeg(0.0,2.0*M_PI));
+   m_gaps.insert(IsoSeg(0.0,2.0*M_PI));
 
    make(root);
 
    int mintag = -1;
    double mindist = 0.0;
 
-   for (size_t i = 0; i < m_blocks.size(); i++) {
-      Line l(m_blocks[i].startpoint, m_blocks[i].endpoint);
+   for (auto& block: m_blocks) {
+      Line l(block.startpoint, block.endpoint);
       if (mintag == -1 || dist(p,l) < mindist) {
          mindist = dist(p,l);
-         mintag = m_blocks[i].tag;
+         mintag = block.tag;
       }
    }
 
@@ -148,18 +151,18 @@ void Isovist::make(BSPNode *here)
    if (m_gaps.size()) {
       int which = here->classify(m_centre);
       if (which == BSPNode::BSPLEFT) {
-         if (here->left)
-            make(here->left);
-         drawnode(here->line,here->m_tag);
-         if (here->right)
-            make(here->right);
+         if (here->m_left.get())
+            make(here->m_left.get());
+         drawnode(here->getLine(),here->getTag());
+         if (here->m_right)
+            make(here->m_right.get());
       }
       else {
-         if (here->right)
-            make(here->right);
-         drawnode(here->line,here->m_tag);
-         if (here->left)
-            make(here->left);
+         if (here->m_right.get())
+            make(here->m_right.get());
+         drawnode(here->getLine(),here->getTag());
+         if (here->m_left)
+            make(here->m_left.get());
       }
    }
 }
@@ -194,56 +197,75 @@ void Isovist::drawnode(const Line& li, int tag)
          addBlock(li,tag,angle2,angle1);
       }
    }
-   // 
-   for (size_t i = m_gaps.size() - 1; i != paftl::npos; i--) {
-      if (m_gaps[i].tagdelete) {
-         m_gaps.remove_at(i);
-      }
+   //
+   for (auto it = m_gaps.begin(); it != m_gaps.end(); ) {
+       if (it->tagdelete) {
+           it = m_gaps.erase(it);
+       }
+       else {
+           ++it;
+       }
    }
 }
 
 void Isovist::addBlock(const Line& li, int tag, double startangle, double endangle)
 {
-   int gap = 0;
+   auto gap = m_gaps.begin();
    bool finished = false;
 
    while (!finished) {
-      while (gap < (int)m_gaps.size() && m_gaps[gap].endangle < startangle) {
+      while (gap != m_gaps.end() && gap->endangle < startangle) {
          gap++;
       }
-      if (gap < (int)m_gaps.size() && m_gaps[gap].startangle < endangle + 1e-9) {
+      if (gap != m_gaps.end() && gap->startangle < endangle + 1e-9) {
          double a,b;
-         if (m_gaps[gap].startangle > startangle - 1e-9) {
-            a = m_gaps[gap].startangle;
-            if (m_gaps[gap].endangle < endangle + 1e-9) {
-               b = m_gaps[gap].endangle;
-               m_gaps[gap].tagdelete = true;
+         if (gap->startangle > startangle - 1e-9) {
+            a = gap->startangle;
+            if (gap->endangle < endangle + 1e-9) {
+               b = gap->endangle;
+               gap->tagdelete = true;
             }
             else {
                b = endangle;
-               m_gaps[gap].startangle = endangle;
+               IsoSeg isoseg = *gap;
+               isoseg.startangle = endangle;
+               auto hint = gap;
+               hint++;
+               m_gaps.erase(gap);
+               gap = m_gaps.insert(hint, isoseg);
             }
          }
          else {
             a = startangle;
-            if (m_gaps[gap].endangle < endangle + 1e-9) {
-               b = m_gaps[gap].endangle;
-               m_gaps[gap].endangle = startangle;
+            if (gap->endangle < endangle + 1e-9) {
+               b = gap->endangle;
+               IsoSeg isoseg = *gap;
+               isoseg.endangle = startangle;
+               auto hint = gap;
+               hint++;
+               m_gaps.erase(gap);
+               gap = m_gaps.insert(hint, isoseg);
             }
             else {
                b = endangle;
-               m_gaps.add(IsoSeg(endangle, m_gaps[gap].endangle, m_gaps[gap].quadrant));
-               m_gaps[gap].endangle = startangle;
+               m_gaps.insert(IsoSeg(endangle, gap->endangle, gap->quadrant));
+               IsoSeg isoseg = *gap;
+               isoseg.endangle = startangle;
+               auto hint = gap;
+               hint++;
+               m_gaps.erase(gap);
+               gap = m_gaps.insert(hint, isoseg);
                gap++; // advance past gap just added
             }
          }
          Point2f pa = intersection_point(li,Line(m_centre,m_centre+pointfromangle(a)));
          Point2f pb = intersection_point(li,Line(m_centre,m_centre+pointfromangle(b)));
-         m_blocks.add(IsoSeg(a,b,pa,pb,tag));
+         m_blocks.insert(IsoSeg(a,b,pa,pb,tag));
       }
       else {
          finished = true;
       }
+      if(gap == m_gaps.end()) break;
       gap++;
    }
 }
@@ -293,10 +315,6 @@ void Isovist::setData(AttributeTable& table, int row, bool simple_version)
    table.setValue(row,col,(float)area);
 
 
-
-   // dX simple version test // TV
-//#define _COMPILE_dX_SIMPLE_VERSION
-#ifndef _COMPILE_dX_SIMPLE_VERSION
    if(!simple_version) {
        col = table.getColumnIndex("Isovist Compactness");
        if (col == -1) {
@@ -338,6 +356,5 @@ void Isovist::setData(AttributeTable& table, int row, bool simple_version)
        }
        table.setValue(row,col,(float)m_perimeter);
    }
-#endif
 
 }

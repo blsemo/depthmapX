@@ -19,6 +19,7 @@
 #include "depthmapX/depthmapView.h"
 #include "salalib/linkutils.h"
 #include "salalib/geometrygenerators.h"
+#include "mainwindow.h"
 #include <QMouseEvent>
 #include <QCoreApplication>
 
@@ -133,7 +134,8 @@ void GLView::paintGL()
         loadDrawingGLObjects();
         m_visibleDrawingLines.updateGL(m_core);
 
-        if(m_pDoc.m_meta_graph->getViewClass() & MetaGraph::VIEWAXIAL) {
+        if(m_pDoc.m_meta_graph->getViewClass() & MetaGraph::VIEWAXIAL
+                && m_pDoc.m_meta_graph->getDisplayedMapRef() != -1) {
             m_visibleShapeGraph.loadGLObjects(m_pDoc.m_meta_graph->getDisplayedShapeGraph());
             m_visibleShapeGraph.updateGL(m_core);
         }
@@ -178,10 +180,10 @@ void GLView::paintGL()
 
 
     float pos [] = {
-        float(min(m_mouseDragRect.bottomRight().x(),m_mouseDragRect.topLeft().x())),
-        float(min(m_mouseDragRect.bottomRight().y(),m_mouseDragRect.topLeft().y())),
-        float(max(m_mouseDragRect.bottomRight().x(),m_mouseDragRect.topLeft().x())),
-        float(max(m_mouseDragRect.bottomRight().y(),m_mouseDragRect.topLeft().y()))
+        float(std::min(m_mouseDragRect.bottomRight().x(),m_mouseDragRect.topLeft().x())),
+        float(std::min(m_mouseDragRect.bottomRight().y(),m_mouseDragRect.topLeft().y())),
+        float(std::max(m_mouseDragRect.bottomRight().x(),m_mouseDragRect.topLeft().x())),
+        float(std::max(m_mouseDragRect.bottomRight().y(),m_mouseDragRect.topLeft().y()))
     };
     m_selectionRect.paintGL(m_mProj, m_mView, m_mModel, QMatrix2x2(pos));
 
@@ -204,9 +206,8 @@ void GLView::loadAxes() {
 }
 
 void GLView::loadDrawingGLObjects() {
-    m_pDoc.m_meta_graph->setLock(this);
+    auto lock = m_pDoc.m_meta_graph->getLock();
     m_visibleDrawingLines.loadLineData(m_pDoc.m_meta_graph->getVisibleDrawingLines(), m_foreground);
-    m_pDoc.m_meta_graph->releaseLock(this);
 }
 
 void GLView::resizeGL(int w, int h)
@@ -234,10 +235,10 @@ void GLView::mouseReleaseEvent(QMouseEvent *event)
         }
         else
         {
-            r.bottom_left.x = min(m_mouseDragRect.bottomRight().x(),m_mouseDragRect.topLeft().x());
-            r.bottom_left.y = min(m_mouseDragRect.bottomRight().y(),m_mouseDragRect.topLeft().y());
-            r.top_right.x = max(m_mouseDragRect.bottomRight().x(),m_mouseDragRect.topLeft().x());
-            r.top_right.y = max(m_mouseDragRect.bottomRight().y(),m_mouseDragRect.topLeft().y());
+            r.bottom_left.x = std::min(m_mouseDragRect.bottomRight().x(),m_mouseDragRect.topLeft().x());
+            r.bottom_left.y = std::min(m_mouseDragRect.bottomRight().y(),m_mouseDragRect.topLeft().y());
+            r.top_right.x = std::max(m_mouseDragRect.bottomRight().x(),m_mouseDragRect.topLeft().x());
+            r.top_right.y = std::max(m_mouseDragRect.bottomRight().y(),m_mouseDragRect.topLeft().y());
         }
         bool selected = false;
         switch(m_mouseMode)
@@ -251,7 +252,9 @@ void GLView::mouseReleaseEvent(QMouseEvent *event)
         case MOUSE_MODE_SELECT:
         {
             // typical selection
-            m_pDoc.m_meta_graph->setCurSel( r, false );
+            Qt::KeyboardModifiers keyMods = QApplication::keyboardModifiers();
+            m_pDoc.m_meta_graph->setCurSel( r, keyMods & Qt::ShiftModifier );
+            ((MainWindow *) m_pDoc.m_mainFrame)->updateToolbar();
             break;
         }
         case MOUSE_MODE_ZOOM_IN:
@@ -338,19 +341,20 @@ void GLView::mouseReleaseEvent(QMouseEvent *event)
         case MOUSE_MODE_POLYGON_TOOL | MOUSE_MODE_SECOND_POINT:
         {
             if (m_polyPoints == 0) {
-               m_pDoc.m_meta_graph->polyBegin(Line(m_tempFirstPoint,worldPoint));
+               m_currentlyEditingShapeRef = m_pDoc.m_meta_graph->polyBegin(Line(m_tempFirstPoint,worldPoint));
                m_polyStart = m_tempFirstPoint;
                m_tempFirstPoint = m_tempSecondPoint;
                m_polyPoints += 2;
             }
             else if (m_polyPoints > 2 && PixelDist(mousePoint, getScreenPoint(m_polyStart)) < 6) {
                // check to see if it's back to the original start point, if so, close off
-               m_pDoc.m_meta_graph->polyClose();
+               m_pDoc.m_meta_graph->polyClose(m_currentlyEditingShapeRef);
                m_polyPoints = 0;
+               m_currentlyEditingShapeRef = -1;
                m_mouseMode = MOUSE_MODE_POLYGON_TOOL;
             }
             else {
-               m_pDoc.m_meta_graph->polyAppend(worldPoint);
+               m_pDoc.m_meta_graph->polyAppend(m_currentlyEditingShapeRef, worldPoint);
                m_tempFirstPoint = m_tempSecondPoint;
                m_polyPoints += 1;
             }
@@ -373,11 +377,11 @@ void GLView::mouseReleaseEvent(QMouseEvent *event)
                     selectionCentre.x = (selBounds.bottom_left.x + selBounds.top_right.x)*0.5;
                     selectionCentre.y = (selBounds.bottom_left.y + selBounds.top_right.y)*0.5;
                 } else {
-                    const pvecint &selectedSet = m_pDoc.m_meta_graph->getSelSet();
+                    const std::set<int> &selectedSet = m_pDoc.m_meta_graph->getSelSet();
                     if (m_pDoc.m_meta_graph->getViewClass() & MetaGraph::VIEWVGA) {
-                        selectionCentre = m_pDoc.m_meta_graph->getDisplayedPointMap().depixelate(selectedSet[0]);
+                        selectionCentre = m_pDoc.m_meta_graph->getDisplayedPointMap().depixelate(*selectedSet.begin());
                     } else if (m_pDoc.m_meta_graph->getViewClass() & MetaGraph::VIEWAXIAL) {
-                        selectionCentre = m_pDoc.m_meta_graph->getDisplayedShapeGraph().getAllShapes()[selectedSet[0]].getCentroid();
+                        selectionCentre = m_pDoc.m_meta_graph->getDisplayedShapeGraph().getAllShapes()[*selectedSet.begin()].getCentroid();
                     }
                 }
                 m_tempFirstPoint = selectionCentre;
@@ -394,11 +398,15 @@ void GLView::mouseReleaseEvent(QMouseEvent *event)
                     m_pDoc.m_meta_graph->getDisplayedPointMap().mergePoints( worldPoint );
                 } else if (m_pDoc.m_meta_graph->getViewClass() & MetaGraph::VIEWAXIAL && selectedCount == 1) {
                     m_pDoc.m_meta_graph->setCurSel( r, true ); // add the new one to the selection set
-                    const pvecint& selectedSet = m_pDoc.m_meta_graph->getSelSet();
+                    const auto& selectedSet = m_pDoc.m_meta_graph->getSelSet();
                     if (selectedSet.size() == 2) {
+                        std::set<int>::iterator it = selectedSet.begin();
+                        int axRef1 = *it;
+                        it++;
+                        int axRef2 = *it;
                         // axial is only joined one-by-one
                         m_pDoc.modifiedFlag = true;
-                        m_pDoc.m_meta_graph->getDisplayedShapeGraph().linkShapes(selectedSet[0], selectedSet[1], true);
+                        m_pDoc.m_meta_graph->getDisplayedShapeGraph().linkShapes(axRef1, axRef2, true);
                         m_pDoc.m_meta_graph->clearSel();
                     }
                 }
@@ -418,8 +426,8 @@ void GLView::mouseReleaseEvent(QMouseEvent *event)
                         m_pDoc.SetRedrawFlag(QGraphDoc::VIEW_ALL,QGraphDoc::REDRAW_GRAPH, QGraphDoc::NEW_DATA);
                     }
                 } else if (m_pDoc.m_meta_graph->getViewClass() & MetaGraph::VIEWAXIAL) {
-                    const pvecint &selectedSet = m_pDoc.m_meta_graph->getSelSet();
-                    Point2f selectionCentre = m_pDoc.m_meta_graph->getDisplayedShapeGraph().getAllShapes()[selectedSet[0]].getCentroid();
+                    const auto& selectedSet = m_pDoc.m_meta_graph->getSelSet();
+                    Point2f selectionCentre = m_pDoc.m_meta_graph->getDisplayedShapeGraph().getAllShapes()[*selectedSet.begin()].getCentroid();
                     m_tempFirstPoint = selectionCentre;
                     m_tempSecondPoint = selectionCentre;
                     m_mouseMode = MOUSE_MODE_UNJOIN | MOUSE_MODE_SECOND_POINT;
@@ -433,11 +441,15 @@ void GLView::mouseReleaseEvent(QMouseEvent *event)
             if (selectedCount > 0) {
                 if (m_pDoc.m_meta_graph->getViewClass() & MetaGraph::VIEWAXIAL && selectedCount == 1) {
                     m_pDoc.m_meta_graph->setCurSel( r, true ); // add the new one to the selection set
-                    const pvecint& selectedSet = m_pDoc.m_meta_graph->getSelSet();
+                    const auto& selectedSet = m_pDoc.m_meta_graph->getSelSet();
                     if (selectedSet.size() == 2) {
+                        std::set<int>::iterator it = selectedSet.begin();
+                        int axRef1 = *it;
+                        it++;
+                        int axRef2 = *it;
                         // axial is only joined one-by-one
                         m_pDoc.modifiedFlag = true;
-                        m_pDoc.m_meta_graph->getDisplayedShapeGraph().unlinkShapes(selectedSet[0], selectedSet[1], true);
+                        m_pDoc.m_meta_graph->getDisplayedShapeGraph().unlinkShapes(axRef1, axRef2, true);
                         m_pDoc.m_meta_graph->clearSel();
                     }
                 }
@@ -464,13 +476,15 @@ void GLView::mouseMoveEvent(QMouseEvent *event)
     int dx = event->x() - m_mouseLastPos.x();
     int dy = event->y() - m_mouseLastPos.y();
 
+    Point2f worldPoint = getWorldPoint(event->pos());
+
     if (event->buttons() & Qt::RightButton
             || (event->buttons() & Qt::LeftButton && m_mouseMode == MOUSE_MODE_PAN)) {
         panBy(dx, dy);
         m_wasPanning = true;
     } else if (event->buttons() & Qt::LeftButton) {
         Point2f lastWorldPoint = getWorldPoint(m_mouseLastPos);
-        Point2f worldPoint = getWorldPoint(event->pos());
+
         if(m_mouseDragRect.isNull()) {
             m_mouseDragRect.setX(lastWorldPoint.x);
             m_mouseDragRect.setY(lastWorldPoint.y);
@@ -481,10 +495,12 @@ void GLView::mouseMoveEvent(QMouseEvent *event)
     }
     if((m_mouseMode & MOUSE_MODE_SECOND_POINT) == MOUSE_MODE_SECOND_POINT)
     {
-        m_tempSecondPoint = getWorldPoint(event->pos());
+        m_tempSecondPoint = worldPoint;
         update();
     }
     m_mouseLastPos = event->pos();
+    m_pDoc.m_position = worldPoint;
+    m_pDoc.UpdateMainframestatus();
 }
 
 void GLView::wheelEvent(QWheelEvent *event)

@@ -131,7 +131,7 @@ SalaProgram::~SalaProgram()
 // use istrstream to make an istream from a string:
 // istrstream file(char *);
 
-bool SalaProgram::parse(istream& program)
+bool SalaProgram::parse(std::istream& program)
 {
    m_var_stack.clear();
    m_error_stack.clear();
@@ -276,7 +276,7 @@ SalaObj SalaProgram::evaluate()
 // this function is called by depthmapX to run a script to update a column
 // the operation is on a single node / row of the database combination
 
-bool SalaProgram::runupdate(int col, const pvecint& selset)
+bool SalaProgram::runupdate(int col, const std::set<int> &selset)
 {
    AttributeTable *table = m_thisobj.getTable();
    bool pointmap = (m_thisobj.type & SalaObj::S_POINTMAP) ? true : false;
@@ -285,8 +285,8 @@ bool SalaProgram::runupdate(int col, const pvecint& selset)
    int& row = m_thisobj.data.graph.node;
    m_col = col;
    if (selset.size()) {
-      for (size_t i = 0; i < selset.size(); i++) {
-         row = selset[i];  // *** NB! selsets for vga store pixelrefs keys, *all* others use rowids directly ***
+      for (auto& sel: selset) {
+         row = sel;  // *** NB! selsets for vga store pixelrefs keys, *all* others use rowids directly ***
          try {
             SalaObj val = evaluate();
             float v = (float) val.toDouble();   // note, toDouble will type check and throw if there's a problem
@@ -336,20 +336,20 @@ bool SalaProgram::runupdate(int col, const pvecint& selset)
 // this function is called by depthmapX to run a script to select values
 // the operation is on a single node / row of the database combination
 
-bool SalaProgram::runselect(pvecint& selsetout, const pvecint& selsetin)
+bool SalaProgram::runselect(std::vector<int> &selsetout, const std::set<int>& selsetin)
 {
    AttributeTable *table = m_thisobj.getTable();
    bool pointmap = (m_thisobj.type & SalaObj::S_POINTMAP) ? true : false;
    //
    int& row = m_thisobj.data.graph.node;
    if (selsetin.size()) {
-      for (size_t i = 0; i < selsetin.size(); i++) {
-         row = selsetin[i];  // *** NB! selsets for vga store pixelrefs keys, *all* others use rowids directly ***
+      for (auto& sel: selsetin) {
+         row = sel;  // *** NB! selsets for vga store pixelrefs keys, *all* others use rowids directly ***
          try {
             SalaObj val = evaluate();
             bool v = val.toBool();   // note, toBool will type check and throw if there's a problem
             if (v) {
-               selsetout.push_back(selsetin[i]);
+               selsetout.push_back(sel);
             }
          }
          catch (SalaError e) {
@@ -401,7 +401,7 @@ SalaCommand::SalaCommand(SalaProgram *program, SalaCommand *parent, int indent, 
    m_line = 0;
 }
 
-int SalaCommand::parse(istream& program, int line) 
+int SalaCommand::parse(std::istream& program, int line)
 {
    m_func_stack.clear();
    m_eval_stack.clear();
@@ -712,7 +712,7 @@ int SalaCommand::parse(istream& program, int line)
             // add the for iterator variable:
             m_program->m_var_stack.push_back(SalaObj());
             int x = m_program->m_var_stack.size() - 1;
-            m_var_names.add(buffer,x);
+            m_var_names.insert(std::make_pair(buffer,x));
             m_for_iter = SalaObj( SalaObj::S_VAR, x);
             // now check for 'in'
             while (alpha == ' ') {
@@ -885,12 +885,12 @@ int SalaCommand::decode(std::string string)   // string copied as makelower appl
          if (retvar == SP_NONE) {
             // see if it exists in the variable stack (walk up scope)
             SalaCommand *parent = m_parent;
-            size_t n = paftl::npos;
+            auto n = parent->m_var_names.end();
             int x = -1;
-            while (parent != NULL && n == -1) {
-               n = parent->m_var_names.searchindex(string);
-               if (n != paftl::npos) {
-                  x = parent->m_var_names.value(n);
+            while (parent != NULL && n == parent->m_var_names.end()) {
+               n = parent->m_var_names.find(string);
+               if (n != parent->m_var_names.end()) {
+                  x = n->second;
                }
                parent = parent->m_parent;
             }
@@ -902,7 +902,7 @@ int SalaCommand::decode(std::string string)   // string copied as makelower appl
                m_program->m_var_stack.push_back(SalaObj());
                x = m_program->m_var_stack.size() - 1;
                // note: attach simply to your m_parent, not parent variable, which has walked up the stack
-               m_parent->m_var_names.add(string,x);
+               m_parent->m_var_names.insert(std::make_pair(string,x));
                m_eval_stack.push_back( SalaObj( SalaObj::S_VAR, x) );
                retvar = SP_DATA;
             }
@@ -1078,8 +1078,8 @@ void SalaCommand::evaluate(SalaObj& obj, bool& ret, bool& ifhandled)
             if (len != 0) {
                for (int i = 0; i < len; i++) {
                   // reset all my stack (actually, all parent functions should do this!)
-                  for (size_t j = 0; j < m_var_names.size(); j++) {
-                     m_program->m_var_stack[m_var_names.value(j)].uninit();
+                  for (auto varName: m_var_names) {
+                     m_program->m_var_stack[varName.second].uninit();
                   }
                   m_program->m_var_stack[m_for_iter.data.var] = list.data.list.list->at(i);
                   for (size_t k = 0; k < m_children.size(); k++) {

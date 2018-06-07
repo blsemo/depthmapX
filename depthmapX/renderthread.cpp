@@ -15,7 +15,6 @@
 
 
 #include <QtGui>
-#include <QtWidgets/QMessageBox>
 #include <QEvent>
 #include "mainwindow.h"
 
@@ -32,10 +31,10 @@ CMSCommunicator::~CMSCommunicator()
 {
 }
 
-inline void CMSCommunicator::CommPostMessage(int m, int x, int y) const
+inline void CMSCommunicator::CommPostMessage(int m, int x) const
 {
    QGraphDoc *pDoc = (QGraphDoc *)parent_doc;
-   pDoc->ProcPostMessage(m, x, y);
+   pDoc->ProcPostMessage(m, x);
 }
 
 //! [0]
@@ -93,7 +92,7 @@ void RenderThread::run()
 			 pDoc->modifiedFlag = true;
          }
          else if (ok == -1) {
-            QMessageBox::warning(0, tr("Warning"), tr("An error was found in the import file"), QMessageBox::Ok, QMessageBox::Ok);
+             emit showWarningMessage(tr("Warning"), tr("An error was found in the import file"));
          }
          // This might change the line layers available, alert the layer chooser:
          QApplication::postEvent(pMain, new QmyEvent((enum QEvent::Type)FOCUSGRAPH, (void*)pDoc, QGraphDoc::CONTROLS_LOADDRAWING));
@@ -110,21 +109,19 @@ void RenderThread::run()
             pDoc->SetUpdateFlag(QGraphDoc::NEW_TABLE);
             break;
          case MINFO_HEADER:
-            QMessageBox::warning(0, tr("Warning"), tr("depthmapX had a problem reading the header information in your MIF file."), QMessageBox::Ok, QMessageBox::Ok);
+            emit showWarningMessage(tr("Warning"), tr("depthmapX had a problem reading the header information in your MIF file."));
             break;
          case MINFO_TABLE:
-            QMessageBox::warning(0, tr("Warning"), tr("depthmapX had a problem reading the table data in your MID file."), QMessageBox::Ok, QMessageBox::Ok);
+            emit showWarningMessage(tr("Warning"), tr("depthmapX had a problem reading the table data in your MID file."));
             break;
          case MINFO_MIFPARSE:
-            QMessageBox::warning(0, tr("Warning"), tr("depthmapX had a problem reading the shape data in your MIF file.\n\
-										Please ensure that your shape data contains only points, lines, polylines or regions."),
-                                        QMessageBox::Ok, QMessageBox::Ok);
+            emit showWarningMessage(tr("Warning"), tr("depthmapX had a problem reading the shape data in your MIF file.\n\
+                                        Please ensure that your shape data contains only points, lines, polylines or regions."));
             break;
          case MINFO_OBJROWS:
-            QMessageBox::warning(0, tr("Warning"), tr("depthmapX had a problem reading the shape data in your MIF file.\n\
+            emit showWarningMessage(tr("Warning"), tr("depthmapX had a problem reading the shape data in your MIF file.\n\
 									It seems as though there are a different number of shapes to rows in the associated table.\n\
-									This may be due to the existance of unsupported shape types in the file."),
-                                        QMessageBox::Ok, QMessageBox::Ok);
+                                    This may be due to the existance of unsupported shape types in the file."));
             break;
          }
          pDoc->SetRedrawFlag(QGraphDoc::VIEW_ALL, QGraphDoc::REDRAW_TOTAL, QGraphDoc::NEW_DATA );
@@ -150,14 +147,6 @@ void RenderThread::run()
       case CMSCommunicator::ANALYSEGRAPH:
          ok = pDoc->m_meta_graph->analyseGraph( comm, pMain->m_options, comm->simple_version);
          pDoc->SetUpdateFlag(QGraphDoc::NEW_DATA);
-         pDoc->SetRedrawFlag(QGraphDoc::VIEW_ALL, QGraphDoc::REDRAW_GRAPH, QGraphDoc::NEW_DATA );
-         break;
-
-      case CMSCommunicator::ANALYSEANGULAR:
-         ok = pDoc->m_meta_graph->analyseAngular( comm, pMain->m_options.process_in_memory );
-         if (ok) {
-            pDoc->SetUpdateFlag(QGraphDoc::NEW_DATA);
-         }
          pDoc->SetRedrawFlag(QGraphDoc::VIEW_ALL, QGraphDoc::REDRAW_GRAPH, QGraphDoc::NEW_DATA );
          break;
 
@@ -218,7 +207,7 @@ void RenderThread::run()
 			 pDoc->modifiedFlag = true;
          }
          else {
-            QMessageBox::warning(0, tr("Warning"), tr("No objects currently visible in drawing layers"), QMessageBox::Ok, QMessageBox::Ok);
+            emit showWarningMessage(tr("Warning"), tr("No objects currently visible in drawing layers"));
          }
          // Tell the sidebar about the new map:
          QApplication::postEvent(pMain, new QmyEvent((enum QEvent::Type)FOCUSGRAPH, (void*)pDoc, QGraphDoc::CONTROLS_LOADDRAWING));
@@ -231,7 +220,7 @@ void RenderThread::run()
             pDoc->SetUpdateFlag(QGraphDoc::NEW_TABLE);
          }
          else {
-            QMessageBox::warning(0, tr("Warning"), tr("No objects currently visible in drawing layers"), QMessageBox::Ok, QMessageBox::Ok);
+            emit showWarningMessage(tr("Warning"), tr("No objects currently visible in drawing layers"));
          }
          pDoc->SetRedrawFlag(QGraphDoc::VIEW_ALL, QGraphDoc::REDRAW_GRAPH, QGraphDoc::NEW_DATA );
          break;
@@ -248,7 +237,7 @@ void RenderThread::run()
             }
          }
          else {
-            QMessageBox::warning(0, tr("Warning"), tr("No lines available in current layer to convert to axial lines"), QMessageBox::Ok, QMessageBox::Ok);
+            emit showWarningMessage(tr("Warning"), tr("No lines available in current layer to convert to axial lines"));
          }
          pDoc->SetRedrawFlag(QGraphDoc::VIEW_ALL, QGraphDoc::REDRAW_GRAPH, QGraphDoc::NEW_DATA );
          break;
@@ -259,7 +248,7 @@ void RenderThread::run()
             pDoc->SetUpdateFlag(QGraphDoc::NEW_TABLE);
          }
          else {
-            QMessageBox::warning(0, tr("Warning"), tr("No objects currently visible in drawing layers"), QMessageBox::Ok, QMessageBox::Ok);
+            emit showWarningMessage(tr("Warning"), tr("No objects currently visible in drawing layers"));
          }
          pDoc->SetRedrawFlag(QGraphDoc::VIEW_ALL, QGraphDoc::REDRAW_GRAPH, QGraphDoc::NEW_DATA );
          break;
@@ -276,7 +265,7 @@ void RenderThread::run()
             }
          }
          else {
-            QMessageBox::warning(0, tr("Warning"), tr("No lines available in current layer to convert to segments"), QMessageBox::Ok, QMessageBox::Ok);
+            emit showWarningMessage(tr("Warning"), tr("No lines available in current layer to convert to segments"));
          }
          pDoc->SetRedrawFlag(QGraphDoc::VIEW_ALL, QGraphDoc::REDRAW_GRAPH, QGraphDoc::NEW_DATA );
          break;
@@ -294,7 +283,7 @@ void RenderThread::run()
             }
          }
          else {
-            QMessageBox::warning(0, tr("Warning"), tr("No objects currently visible in drawing layers"), QMessageBox::Ok, QMessageBox::Ok);
+            emit showWarningMessage(tr("Warning"), tr("No objects currently visible in drawing layers"));
          }
          pDoc->SetRedrawFlag(QGraphDoc::VIEW_ALL, QGraphDoc::REDRAW_GRAPH, QGraphDoc::NEW_DATA );
          break;
@@ -312,7 +301,7 @@ void RenderThread::run()
             }
          }
          else {
-            QMessageBox::warning(0, tr("Warning"), tr("No polygons currently visible in drawing layers"), QMessageBox::Ok, QMessageBox::Ok);
+            emit showWarningMessage(tr("Warning"), tr("No polygons currently visible in drawing layers"));
          }
          pDoc->SetRedrawFlag(QGraphDoc::VIEW_ALL, QGraphDoc::REDRAW_GRAPH, QGraphDoc::NEW_DATA );
          break;
@@ -333,7 +322,7 @@ void RenderThread::run()
             }
          }
          else {
-            QMessageBox::warning(0, tr("Warning"), tr("No lines exist in map to convert to segments"), QMessageBox::Ok, QMessageBox::Ok);
+            emit showWarningMessage(tr("Warning"), tr("No lines exist in map to convert to segments"));
          }
          pDoc->SetRedrawFlag(QGraphDoc::VIEW_ALL, QGraphDoc::REDRAW_GRAPH, QGraphDoc::NEW_DATA );
          break;
@@ -356,14 +345,6 @@ void RenderThread::run()
 
       case CMSCommunicator::TOPOMETANALYSIS:
          ok = pDoc->m_meta_graph->analyseTopoMet( comm, pMain->m_options );
-         if (ok) {
-            pDoc->SetUpdateFlag(QGraphDoc::NEW_DATA);
-         }
-         pDoc->SetRedrawFlag(QGraphDoc::VIEW_ALL, QGraphDoc::REDRAW_GRAPH, QGraphDoc::NEW_DATA );
-         break;
-
-      case CMSCommunicator::MAKEAXIALLINES:
-         ok = pDoc->m_meta_graph->makeAxialLines( comm, pMain->m_options.process_in_memory );
          if (ok) {
             pDoc->SetUpdateFlag(QGraphDoc::NEW_DATA);
          }
@@ -455,95 +436,10 @@ void RenderThread::run()
             }
             pDoc->SetRedrawFlag(QGraphDoc::VIEW_ALL, QGraphDoc::REDRAW_POINTS, QGraphDoc::NEW_DATA );
          }
-         break;     
-
-      case CMSCommunicator::IMPORTEDANALYSIS:
-         {
-/*            int analysis_type = comm->GetModule().m_analysis_type[ comm->GetOption() ];
-
-            // temporarily disable VGA from the metagraph to avoid redraw problems:
-            int state = pDoc->m_meta_graph->getState();
-            if (analysis_type & DLL_GRAPH_FILE_ANALYSIS) {
-               state &= ~(MetaGraph::POINTMAPS | MetaGraph::SHAPEGRAPHS | MetaGraph::DATAMAPS);
-            }
-            else if (analysis_type & DLL_VGA_ANALYSIS) {
-               state &= ~MetaGraph::POINTMAPS;
-            }
-            else if (analysis_type & (DLL_AXIAL_ANALYSIS | DLL_SEGMENT_ANALYSIS)) {
-               state &= ~MetaGraph::SHAPEGRAPHS;
-            }
-            else if (analysis_type & DLL_DATA_ANALYSIS) {
-               state &= ~MetaGraph::DATAMAPS;
-            }
-            pDoc->m_meta_graph->setState(state);
-            //
-            FUNC_PROCESSVGA processVGA = (FUNC_PROCESSVGA)GetProcAddress(comm->GetModule().m_inst,"processVGA");
-            FUNC_PROCESSSHAPE processShape = (FUNC_PROCESSSHAPE)GetProcAddress(comm->GetModule().m_inst,"processShape");
-            FUNC_PROCESSATTRIBUTES processAttributes = (FUNC_PROCESSATTRIBUTES)GetProcAddress(comm->GetModule().m_inst,"processAttributes");
-            FUNC_PROCESSGRAPHFILE processGraphFile = (FUNC_PROCESSGRAPHFILE)GetProcAddress(comm->GetModule().m_inst,"processGraphFile");
-            FUNC_POSTPROCESS postprocess = (FUNC_POSTPROCESS)GetProcAddress(comm->GetModule().m_inst,"postprocess");
-            //
-            IComm dllcomm;
-            dllcomm.setData( (void *) comm );
-            IVGAMap dllvga;
-            IShapeMap dllshape;
-            IGraphFile dllgraph;
-            if (analysis_type & DLL_GRAPH_FILE_ANALYSIS) {
-               dllgraph.setData( (void *) pDoc->m_meta_graph );
-            }
-            if (analysis_type & DLL_VGA_ANALYSIS) {
-               dllvga.setData( (void *) &(pDoc->m_meta_graph->getDisplayedPointMap()) );
-            }
-            if (analysis_type & (DLL_AXIAL_ANALYSIS | DLL_SEGMENT_ANALYSIS)) {
-               dllshape.setData( (void *) &(pDoc->m_meta_graph->getDisplayedShapeGraph()) );
-            }
-            else if (analysis_type & DLL_DATA_ANALYSIS) {
-               dllshape.setData( (void *) &(pDoc->m_meta_graph->getDisplayedDataMap()) );
-            }
-            IAttributes dllattr;
-            dllattr.setData( (void *) &(pDoc->m_meta_graph->getAttributeTable()), analysis_type );
-            //
-            ok = false;
-            if ((analysis_type & DLL_GRAPH_FILE_ANALYSIS) && processGraphFile != NULL) {
-               ok = processGraphFile( comm->GetOption(), &dllcomm, &dllgraph );
-            }
-            else if ((analysis_type & DLL_VGA_ANALYSIS) && processVGA != NULL) {
-               ok = processVGA( comm->GetOption(), &dllcomm, &dllvga, &dllattr );
-            }
-            else if ((analysis_type & (DLL_AXIAL_ANALYSIS | DLL_SEGMENT_ANALYSIS | DLL_DATA_ANALYSIS)) && processShape != NULL) {
-               ok = processShape( comm->GetOption(), &dllcomm, &dllshape, &dllattr );
-            }
-            else if ((analysis_type & DLL_ATTRIBUTE_ANALYSIS) && processAttributes != NULL) {
-               ok = processAttributes( comm->GetOption(), &dllcomm, &dllattr );
-            }
-            //
-            // Now, the new file stuff could have added new layers or deleted them... we'll need to just explicitly check what's in the file and set the state accordingly:
-            if (pDoc->m_meta_graph->PointMaps::size() > 0) {
-               state |= MetaGraph::POINTMAPS;
-            }
-            if (pDoc->m_meta_graph->m_data_maps.getMapCount() > 0) {
-               state |= MetaGraph::DATAMAPS;
-            }
-            if (pDoc->m_meta_graph->m_shape_graphs.getMapCount() > 0) {
-               state |= MetaGraph::SHAPEGRAPHS;
-            }
-            // at this stage, before redraw, it is time to set the old state back on:
-            pDoc->m_meta_graph->setState(state);
-            //
-            //
-            if (ok) {
-               pDoc->SetUpdateFlag(QGraphDoc::NEW_TABLE); // includes set modified flag (note: 10.04.08 NEW_TABLE required because analysis may create a new table)
-               if (postprocess != NULL) {
-                  postprocess( comm->GetOption() );
-               }
-            }
-            // note: a total redraw is required in case new geometry has been added (new to Dmap 8)
-            pDoc->SetRedrawFlag(QGraphDoc::VIEW_ALL, QGraphDoc::REDRAW_TOTAL, QGraphDoc::NEW_DATA );*/
-         }
          break;
       }
 
-      pDoc->DestroyWaitDialog();
+      emit closeWaitDialog();
 	  msleep(100);
       delete pDoc->m_communicator;     // Ensure we delete *the* communicator
       pDoc->m_communicator = NULL;

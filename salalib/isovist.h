@@ -21,13 +21,14 @@
 #ifndef __ISOVIST_H__
 #define __ISOVIST_H__
 
-#include "genlib/bspnode.h"
+#include "genlib/bsptree.h"
+#include <set>
 
 // this is very much like sparksieve:
 
 struct IsoSeg
 {
-   bool tagdelete;
+   mutable bool tagdelete;
    double startangle;
    double endangle;
    Point2f startpoint;
@@ -62,9 +63,9 @@ class Isovist
 {
 protected:
    Point2f m_centre;
-   pqvector<IsoSeg> m_blocks;
-   pqvector<IsoSeg> m_gaps;
-   pqvector<Point2f> m_poly;
+   std::set<IsoSeg> m_blocks;
+   std::set<IsoSeg> m_gaps;
+   std::vector<Point2f> m_poly;
    prefvec<PointDist> m_occlusion_points;
    double m_perimeter;
    double m_occluded_perimeter;
@@ -72,7 +73,7 @@ protected:
    double m_min_radial;
 public:
    Isovist() {;}
-   const pqvector<Point2f>& getPolygon() const { return m_poly; }
+   const std::vector<Point2f>& getPolygon() const { return m_poly; }
    const prefvec<PointDist>& getOcclusionPoints() const { return m_occlusion_points; }
    const Point2f& getCentre() const { return m_centre; }
    //

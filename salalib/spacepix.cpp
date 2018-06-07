@@ -27,6 +27,7 @@
 #include <salalib/spacepix.h>
 
 #include "genlib/stringutils.h"
+#include "genlib/legacyconverters.h"
 #ifndef _WIN32
 #define _finite finite
 #endif
@@ -54,9 +55,9 @@
    }
 */
 
-PixelRefList PixelBase::pixelateLine( Line l, int scalefactor ) const
+PixelRefVector PixelBase::pixelateLine( Line l, int scalefactor ) const
 {
-   PixelRefList pixel_list;
+   PixelRefVector pixel_list;
 
    // this is *not* correct for lines that are off the edge...
    // should use non-constrained version (false), and find where line enters the region
@@ -144,9 +145,9 @@ PixelRefList PixelBase::pixelateLine( Line l, int scalefactor ) const
 // this version includes all pixels through which the line passes with touching
 // counting as both pixels.
 
-PixelRefList PixelBase::pixelateLineTouching( Line l, double tolerance ) const
+PixelRefVector PixelBase::pixelateLineTouching( Line l, double tolerance ) const
 {
-   PixelRefList pixel_list;
+   PixelRefVector pixel_list;
 
    // now assume that scaling to region then scaling up is going to give pixelation
    // this is not necessarily the case!
@@ -216,9 +217,9 @@ PixelRefList PixelBase::pixelateLineTouching( Line l, double tolerance ) const
 
 // this version for a quick set of pixels
 
-PixelRefList PixelBase::quickPixelateLine(PixelRef p, PixelRef q)
+PixelRefVector PixelBase::quickPixelateLine(PixelRef p, PixelRef q)
 {
-   PixelRefList list;
+   PixelRefVector list;
 
    double dx = q.x - p.x;
    double dy = q.y - p.y;
@@ -423,7 +424,7 @@ void SpacePixel::makeViewportLines( const QtRegion& viewport ) const
    for (int i = bl.x; i <= tr.x; i++) {
       for (int j = bl.y; j <= tr.y; j++) {
          for (size_t k = 0; k < m_pixel_lines[i][j].size(); k++) {
-            m_display_lines[ m_lines.searchindex(m_pixel_lines[i][j][k]) ] = 1;
+            m_display_lines[ depthmapX::findIndexFromKey(m_lines, m_pixel_lines[i][j][k]) ] = 1;
          }
       }
    }
@@ -453,12 +454,12 @@ bool SpacePixel::findNextLine(bool& nextlayer) const
 
 const Line& SpacePixel::getNextLine() const
 {
-   m_display_lines[m_current] = 0;  // You've drawn it  
+   m_display_lines[m_current] = 0;  // You've drawn it
    /*
    // Fixing: removed rectangle scaling
    l.denormalScale( m_region );
    */
-   return m_lines[m_current].line;
+   return m_lines.find(m_current)->second.line;
 }
 
 void SpacePixel::initLines(int size, const Point2f& min, const Point2f& max, double density)
@@ -535,11 +536,11 @@ void SpacePixel::reinitLines(double density)
    }
 
    // now re-add the lines:
-   for (size_t i = 0; i < m_lines.size(); i++) {
-      PixelRefList list = pixelateLine( m_lines.value(i).line );
+   for (auto line: m_lines) {
+      PixelRefVector list = pixelateLine( line.second.line );
       for (size_t j = 0; j < list.size(); j++) {
          // note: m_pixel_lines will be reordered by sortPixelLines
-         m_pixel_lines[list[j].x][list[j].y].push_back( m_lines.key(i) );
+         m_pixel_lines[list[j].x][list[j].y].push_back( line.first );
       }
    }
 
@@ -556,10 +557,10 @@ void SpacePixel::addLine(const Line& line)
 {
    // Fairly simple: just pixelates the line!
    m_ref++; // need unique keys for the lines so they can be added / removed at any time
-   m_lines.add( m_ref, LineTest(line, 0) );
+   m_lines.insert(std::make_pair( m_ref, LineTest(line, 0) ));
    m_newline = true;
 
-   PixelRefList list = pixelateLine( line );
+   PixelRefVector list = pixelateLine( line );
 
    for (size_t i = 0; i < list.size(); i++) {
       // note: m_pixel_lines will be reordered by sortPixelLines
@@ -570,10 +571,10 @@ void SpacePixel::addLine(const Line& line)
 int SpacePixel::addLineDynamic(const Line& line)
 {
    m_ref++; // need unique keys for the lines so they can be added / removed at any time
-   m_lines.add( m_ref, LineTest(line, 0) );
+   m_lines.insert(std::make_pair( m_ref, LineTest(line, 0) ));
    m_newline = true;
 
-   PixelRefList list = pixelateLine( line );
+   PixelRefVector list = pixelateLine( line );
 
    for (size_t i = 0; i < list.size(); i++) {
       // note: dynamic lines could be dodgy... only pixelate bits that fall in range
@@ -590,14 +591,14 @@ bool SpacePixel::removeLineDynamic(int ref, Line& line)   // fills in line if it
 {
    bool retvar = true;
 
-   size_t lineref = m_lines.searchindex(ref);
+   auto lineref = m_lines.find(ref);
 
-   if (lineref == paftl::npos) {
+   if (lineref == m_lines.end()) {
       return false;
    }
 
-   line = m_lines[lineref].line;
-   PixelRefList list = pixelateLine( line );
+   line = lineref->second.line;
+   PixelRefVector list = pixelateLine( line );
 
    for (size_t i = 0; i < list.size(); i++) {
       // note: dynamic lines could be dodgy... only pixelate bits that fall in range
@@ -610,7 +611,7 @@ bool SpacePixel::removeLineDynamic(int ref, Line& line)   // fills in line if it
       }
    }
 
-   m_lines.remove_at(lineref);
+   m_lines.erase(lineref);
 
    // just flag up if true
    m_newline = true;
@@ -625,7 +626,7 @@ void SpacePixel::sortPixelLines()
          pvecint& pixel_lines = m_pixel_lines[i][j];
          // tidy up in case of removal
          for (size_t n = pixel_lines.size() - 1; n != paftl::npos; n--) {
-            if (m_lines.searchindex(pixel_lines[n]) == paftl::npos) {
+            if (m_lines.find(pixel_lines[n]) == m_lines.end()) {
                pixel_lines.remove_at(n);
             }
          }
@@ -638,13 +639,13 @@ bool SpacePixel::intersect( const Line& l, double tolerance )
 {
    m_test++;  // note loops! (but vary rarely: inevitabley, lines will have been marked before it loops)
 
-   PixelRefList list = pixelateLine( l );
+   PixelRefVector list = pixelateLine( l );
 
    for (size_t i = 0; i < list.size(); i++) {
       for (size_t j = 0; j < m_pixel_lines[ list[i].x ][ list[i].y ].size(); j++) {
          int lineref = m_pixel_lines[ list[i].x ][ list[i].y ][j];
          try {
-            LineTest& linetest = m_lines.search(lineref);
+            LineTest& linetest = m_lines.find(lineref)->second;
             if (linetest.test != m_test) {
                if ( intersect_region(linetest.line, l) ) {
                   if ( intersect_line(linetest.line, l, tolerance) ) {
@@ -668,13 +669,13 @@ bool SpacePixel::intersect_exclude( const Line& l, double tolerance )
 {
    m_test++;  // note loops! (but vary rarely: inevitabley, lines will have been marked before it loops)
 
-   PixelRefList list = pixelateLine( l );
+   PixelRefVector list = pixelateLine( l );
 
    for (size_t i = 0; i < list.size(); i++) {
       for (size_t j = 0; j < m_pixel_lines[ list[i].x ][ list[i].y ].size(); j++) {
          int lineref = m_pixel_lines[ list[i].x ][ list[i].y ][j];
          try {
-            LineTest& linetest = m_lines.search(lineref);
+            LineTest& linetest = m_lines.find(lineref)->second;
             if (linetest.test != m_test) {
                if ( intersect_region(linetest.line, l) ) {
                   if ( intersect_line(linetest.line, l, tolerance) ) {
@@ -697,61 +698,14 @@ bool SpacePixel::intersect_exclude( const Line& l, double tolerance )
    return false;
 }
 
-/*
-// get the first crossing point of lines with lines...
-Point2f SpacePixel::getFirstCrossingPoint(const Line& l, int fromend, pvecint& ignorelist)
-{
-   Point2f point;
-
-   int axis;
-   if (l.width() > l.height()) {
-      axis = XAXIS;
-   }
-   else {
-      axis = YAXIS;
-   }
-
-   pvecdouble cross_list = getCrossingPoints(l, axis, ignorelist);
-
-   if (fromend == Line::START) {
-      if (!cross_list.size()) {
-         point = l.end();
-      }
-      else {
-         if (axis == XAXIS || l.sign() == 1) {
-            point = l.point_on_line(cross_list.head(),axis);
-         }
-         else {
-            point = l.point_on_line(cross_list.tail(),axis);
-         }
-      }
-   }
-   else {
-      if (!cross_list.size()) {
-         point = l.start();
-      }
-      else {
-         if (axis == XAXIS || l.sign() == 1) {
-            point = l.point_on_line(cross_list.tail(),axis);
-         }
-         else {
-            point = l.point_on_line(cross_list.head(),axis);
-         }
-      }
-   }
-
-   return point;
-}
-*/
-
 void SpacePixel::cutLine(Line& l, short dir) 
 {
    m_test++;
 
    double tolerance = l.length() * 1e-9;
 
-   pvecdouble loc;
-   PixelRefList vec = pixelateLine(l);
+   std::set<double> loc;
+   PixelRefVector vec = pixelateLine(l);
 
    int axis;
    if (l.width() >= l.height()) {
@@ -772,7 +726,7 @@ void SpacePixel::cutLine(Line& l, short dir)
       for (size_t j = 0; j < m_pixel_lines[ pix.x ][ pix.y ].size(); j++) {
          int lineref = m_pixel_lines[ pix.x ][ pix.y ][j];
          //try {
-            LineTest& linetest = m_lines.search(lineref);
+            LineTest& linetest = m_lines.find(lineref)->second;
             if (linetest.test != m_test) {
                if ( intersect_region(linetest.line, l, tolerance * linetest.line.length()) ) {
                   switch ( intersect_line_distinguish(linetest.line, l, tolerance * linetest.line.length() ) ) {
@@ -780,7 +734,7 @@ void SpacePixel::cutLine(Line& l, short dir)
                      break;
                   case 2:
                      {
-                        loc.add( l.intersection_point(linetest.line, axis) );
+                        loc.insert( l.intersection_point(linetest.line, axis) );
                      }
                      break;
                   case 1:
@@ -809,14 +763,14 @@ void SpacePixel::cutLine(Line& l, short dir)
                                  if (sgn(oa) != sgn(ob) || fabs(oa) < tolerance * linetest.line.length() || fabs(ob) < tolerance * linetest.line.length()) {
                                     // crossed
                                     if (fabs(oa) > tolerance * linetest.line.length()) {  // checks not parallel...
-                                       loc.add( l.intersection_point(linetest.line, axis) );
+                                       loc.insert( l.intersection_point(linetest.line, axis) );
                                     }
                                     else if (fabs(ob) > tolerance * linetest.line.length()) {
-                                       loc.add( l.intersection_point(touching_lines[pair], axis) );
+                                       loc.insert( l.intersection_point(touching_lines[pair], axis) );
                                     }
                                     else {
                                        // parallel with both lines ... this shouldn't happen...
-                                       cerr << "couldn't chop at boundary" << endl;
+                                       std::cerr << "couldn't chop at boundary" << std::endl;
                                     }
                                  }
                               }
@@ -844,12 +798,12 @@ void SpacePixel::cutLine(Line& l, short dir)
          // check the first loc actually occurred in this pixel...
          if ( (dir == l.direction() && (axis == XAXIS || l.sign() == 1)) ||
               (dir != l.direction() && (axis == YAXIS && l.sign() == -1)) ) {      
-            if (pix == pixelate(l.point_on_line(loc.head(),axis))) {
+            if (pix == pixelate(l.point_on_line(*loc.begin(),axis))) {
                found = true;
             }
          }
          else {
-            if (pix == pixelate(l.point_on_line(loc.tail(),axis))) {
+            if (pix == pixelate(l.point_on_line(*loc.rbegin(),axis))) {
                found = true;
             }
          }
@@ -861,34 +815,34 @@ void SpacePixel::cutLine(Line& l, short dir)
       double pos;
       if (dir == l.direction()) {
          if (axis == XAXIS) {
-            pos = loc.head();
+            pos = *loc.begin();
             l.by() = l.ay() + l.sign() * l.height() * (pos - l.ax()) / l.width();
             l.bx() = pos;
          }
          else if (l.sign() == 1) {
-            pos = loc.head();
+            pos = *loc.begin();
             l.bx() = l.ax() + l.width() * (pos - l.ay()) / l.height();
             l.by() = pos;
          }
          else {
-            pos = loc.tail();
+            pos = *loc.rbegin();
             l.bx() = l.ax() + l.width() * (l.ay() - pos) / l.height();
             l.by() = pos;
          }
       }
       else {
          if (axis == XAXIS) {
-            pos = loc.tail();
+            pos = *loc.rbegin();
             l.ay() = l.by() - l.sign() * l.height() * (l.bx() - pos) / l.width();
             l.ax() = pos;
          }
          else if (l.sign() == 1) {
-           pos = loc.tail();
+           pos = *loc.rbegin();
            l.ax() = l.bx() - l.width() * (l.by() - pos) / l.height();
            l.ay() = pos;
          }
          else {
-           pos = loc.head();
+           pos = *loc.begin();
            l.ax() = l.bx() - l.width() * (pos - l.by()) / l.height();
            l.ay() = pos;
          }
@@ -901,27 +855,17 @@ pvecdouble SpacePixel::getCrossingPoints(const Line& l, int axis, pvecint& ignor
    pvecdouble cross_list;
    pvecint checked_list = ignorelist;
 
-   /*
-   // Regions no longer normalised
-   l.normalScale( m_region );
-
-   // Now it's me thats doing the squashing business... 
-   // hmm... must correct pixelate function, not the DXF import...
-
-   squash( l.bottom_left );
-   squash( l.top_right );
-   */
-
-   PixelRefList list = pixelateLine( l );
+   PixelRefVector list = pixelateLine( l );
 
    for (size_t i = 0; i < list.size(); i++) {
       for (size_t j = 0; j < m_pixel_lines[ list[i].x ][ list[i].y ].size(); j++) {
          int lineref = m_pixel_lines[ list[i].x ][ list[i].y ][j];
          if (checked_list.searchindex( lineref ) == paftl::npos) {
             checked_list.add( lineref, paftl::ADD_HERE );
-            if ( intersect_region(m_lines[lineref].line, l) ) {
+            auto line = m_lines.find(lineref)->second.line;
+            if ( intersect_region(line, l) ) {
                double c;
-               if ( l.intersect_line(m_lines[lineref].line, axis, c) ) {
+               if ( l.intersect_line(line, axis, c) ) {
                   if (_finite(c)) {
                      cross_list.add( c );
                   }
@@ -929,12 +873,12 @@ pvecdouble SpacePixel::getCrossingPoints(const Line& l, int axis, pvecint& ignor
                   // of the crossing line: hope that there are no points actually on the 
                   // line (otherwise these will be confused)
                   else if (axis == XAXIS) {
-                     cross_list.add( m_lines[lineref].line.ax() );
-                     cross_list.add( m_lines[lineref].line.bx() );
+                     cross_list.add( line.ax() );
+                     cross_list.add( line.bx() );
                   }
                   else /* if (axis == YAXIS) */ {
-                     cross_list.add( m_lines[lineref].line.ay() );
-                     cross_list.add( m_lines[lineref].line.by() );
+                     cross_list.add( line.ay() );
+                     cross_list.add( line.by() );
                   }
                }
             }
@@ -944,7 +888,7 @@ pvecdouble SpacePixel::getCrossingPoints(const Line& l, int axis, pvecint& ignor
    return cross_list;
 }
 
-bool SpacePixel::read( ifstream& stream, int version )
+bool SpacePixel::read( std::istream& stream, int version )
 {
    // clear anything that was there:
    if (m_pixel_lines)
@@ -962,22 +906,17 @@ bool SpacePixel::read( ifstream& stream, int version )
    m_lines.clear();
 
    // read name:
-   if (version >= VERSION_SPACEPIXELGROUPS) {
-      m_name = dXstring::readString(stream );
-      stream.read( (char *) &m_show, sizeof(m_show) );
-   }
-   else {
-      m_name = "<unknown>";
-   }
+
+   m_name = dXstring::readString(stream );
+   stream.read( (char *) &m_show, sizeof(m_show) );
+
    if (m_name.empty()) {
       m_name = "<unknown>";
    }
 
    m_edit = false; // <- just default to not editable on read
 
-   if (version >= VERSION_LAYERCOLORS) {
-      stream.read( (char *) &m_color, sizeof(m_color) );
-   }
+   stream.read( (char *) &m_color, sizeof(m_color) );
 
    // read extents:
    stream.read( (char *) &m_region, sizeof(m_region) );
@@ -996,32 +935,18 @@ bool SpacePixel::read( ifstream& stream, int version )
       m_pixel_lines[i] = new pvecint[m_rows];
    }
 
-   if (version < VERSION_DYNAMICLINES) {
-      // read lines as refvec...
-      prefvec<Line> lines;
-      lines.read( stream );
-      // ... and transfer to new system:
-      m_ref = -1;
-      for (size_t i = 0; i < lines.size(); i++) {
-         m_lines.add(++m_ref, LineTest(lines[i],0));
-      }
-   }
-   else {
-      stream.read((char *) &m_ref, sizeof(m_ref));
-      m_lines.read( stream );
-   }
 
-   if (version < VERSION_SPACEPIXELGROUPS) {
-      // Scale up lines (should just work)
-      for (size_t i = 0; i < m_lines.size(); i++) {
-         m_lines[i].line.denormalScale(m_region);
-      }
-   }
+   stream.read((char *) &m_ref, sizeof(m_ref));
+   pmap<int,LineTest> temp_m_lines;
+   temp_m_lines.read(stream);
+   m_lines = genshim::toSTLMap(temp_m_lines);
 
    // now load into structure:
-   for (size_t n = 0; n < m_lines.size(); n++) {
+   int n = -1;
+   for (auto line: m_lines) {
+      n++;
 
-      PixelRefList list = pixelateLine( m_lines[n].line );
+      PixelRefVector list = pixelateLine( line.second.line );
 
       for (size_t m = 0; m < list.size(); m++) {
          // note: m_pixel_lines is an *ordered* list! --- used by other ops.
@@ -1032,7 +957,7 @@ bool SpacePixel::read( ifstream& stream, int version )
    return true;
 }
 
-bool SpacePixel::write( ofstream& stream )
+bool SpacePixel::write( std::ofstream& stream )
 {
    // write name:
    dXstring::writeString(stream, m_name );
@@ -1048,7 +973,8 @@ bool SpacePixel::write( ofstream& stream )
 
    // write lines:
    stream.write( (char *) &m_ref, sizeof(m_ref) );
-   m_lines.write( stream );
+
+   genshim::toPMap(m_lines).write( stream );
 
    return true;
 }

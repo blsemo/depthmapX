@@ -42,7 +42,7 @@ namespace dm_runmethods
     std::unique_ptr<MetaGraph> loadGraph(const std::string& filename, IPerformanceSink &perfWriter) {
         std::unique_ptr<MetaGraph> mgraph(new MetaGraph);
         std::cout << "Loading graph " << filename << std::flush;
-        DO_TIMED( "Load graph file", auto result = mgraph->read(filename);)
+        DO_TIMED( "Load graph file", auto result = mgraph->readFromFile(filename);)
         if ( result != MetaGraph::OK)
         {
             std::stringstream message;
@@ -63,7 +63,7 @@ namespace dm_runmethods
         }
 
         std::unique_ptr<MetaGraph> mgraph(new MetaGraph);
-        DO_TIMED( "Load graph file", auto result = mgraph->read(cmdP.getFileName());)
+        DO_TIMED( "Load graph file", auto result = mgraph->readFromFile(cmdP.getFileName());)
         if ( result != MetaGraph::OK && result != MetaGraph::NOT_A_GRAPH)
         {
             std::stringstream message;
@@ -78,12 +78,20 @@ namespace dm_runmethods
             ifstream file(cmdP.getFileName());
 
             std::unique_ptr<Communicator> comm(new ICommunicator());
+
+            depthmapX::ImportFileType importFileType = depthmapX::ImportFileType::TSV;
+            if(dXstring::toLower(ext) == ".csv") {
+                importFileType = depthmapX::ImportFileType::CSV;
+            } else if (dXstring::toLower(ext) == ".dxf") {
+                importFileType = depthmapX::ImportFileType::DXF;
+            }
+
             depthmapX::importFile(*mgraph,
                                   file,
-                                  comm.get(),
+                                  false,
                                   cmdP.getFileName(),
                                   depthmapX::ImportType::DRAWINGMAP,
-                                  (dXstring::toLower(ext) == ".csv") ? depthmapX::ImportFileType::CSV : depthmapX::ImportFileType::TSV);
+                                  importFileType);
         }
         DO_TIMED("Writing graph", mgraph->write(cmdP.getOuputFile().c_str(),METAGRAPH_VERSION, false);)
     }
@@ -182,9 +190,9 @@ namespace dm_runmethods
         }
 
         std::cout << "ok\nSetting up grid... " << std::flush;
-        if (!mGraph->PointMaps::size() || mGraph->getDisplayedPointMap().isProcessed()) {
+        if (mGraph->getPointMaps().empty() || mGraph->getDisplayedPointMap().isProcessed()) {
            // this can happen if there are no displayed maps -- so flag new map required:
-            mGraph->addNewMap();
+            mGraph->addNewPointMap();
         }
         DO_TIMED("Setting grid", mGraph->setGrid(gridSize, Point2f(0.0, 0.0)))
 
@@ -436,6 +444,12 @@ namespace dm_runmethods
                 DO_TIMED("Writing pointmap connections", currentMap.outputConnectionsAsCSV(stream, ","))
                 break;
             }
+            case ExportParser::POINTMAP_LINKS_CSV:
+            {
+                ofstream stream(cmdP.getOuputFile().c_str());
+                DO_TIMED("Writing pointmap connections", currentMap.outputLinksAsCSV(stream, ","))
+                break;
+            }
             default:
             {
                 throw depthmapX::SetupCheckException("Error, unsupported export mode");
@@ -443,4 +457,37 @@ namespace dm_runmethods
         }
     }
 
+    void runStepDepth(
+            const CommandLineParser &clp,
+            const std::vector<Point2f> &stepDepthPoints,
+            IPerformanceSink &perfWriter)
+    {
+        auto mGraph = loadGraph(clp.getFileName().c_str(),perfWriter);
+
+        std::cout << "ok\nSelecting cells... " << std::flush;
+
+        for( auto & point : stepDepthPoints ) {
+            auto graphRegion = mGraph->getRegion();
+            if (!graphRegion.contains(point))
+            {
+                throw depthmapX::RuntimeException("Point outside of target region");
+            }
+            QtRegion r(point, point);
+            mGraph->setCurSel(r, true);
+        }
+
+        std::cout << "ok\nCalculating step-depth... " << std::flush;
+
+        Options options;
+        options.global = 0;
+        options.point_depth_selection = 1;
+
+        std::unique_ptr<Communicator> comm(new ICommunicator());
+
+        DO_TIMED("Calculating step-depth", mGraph->analyseGraph( comm.get(), options, false))
+
+        std::cout << " ok\nWriting out result..." << std::flush;
+        DO_TIMED("Writing graph", mGraph->write(clp.getOuputFile().c_str(),METAGRAPH_VERSION, false))
+                std::cout << " ok" << std::endl;
+    }
 }

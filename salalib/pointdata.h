@@ -19,8 +19,10 @@
 #define __POINTDATA_H__
 
 #include "genlib/exceptions.h"
-#include "vertex.h"
+#include "salalib/point.h"
+#include "salalib/options.h"
 #include <vector>
+#include <set>
 
 class MetaGraph;
 class PointMap;
@@ -44,149 +46,11 @@ protected:
 };
 
 class Bin;
-class Node;
 class Isovist;
 
 struct PixelVec;
 
-class Point {
-   friend class Bin;
-   friend class PointMap;
-   friend class MetaGraph; // <- for file conversion routines
-   friend class PafAgent;
-   friend class PafWalker;
-public:
-   enum { EMPTY = 0x0001, FILLED = 0x0002, 
-          BLOCKED = 0x0004, CONTEXTFILLED = 0x0008, // PARTBLOCKED = 0x0008 deprecated
-          SELECTED = 0x0010, EDGE = 0x0020, MERGED = 0x0040,  // PINNED = 0x0020 deprecated
-          AGENTFILLED = 0x0080, AGENTFADE = 0x0100, AGENTA = 0x0200, AGENTB = 0x0400, AGENTC = 0x0800,
-          UPDATELINEADDED = 0x1000, UPDATELINEREMOVED = 0x2000, HIGHLIGHT = 0x4000,
-          AUGMENTED = 0x8000 // AV TV
-        };
-   // note the order of these connections is important and used elsewhere:
-   enum { CONNECT_E = 0x01, CONNECT_NE = 0x02, CONNECT_N = 0x04, CONNECT_NW = 0x08, 
-          CONNECT_W = 0x10, CONNECT_SW = 0x20, CONNECT_S = 0x40, CONNECT_SE = 0x80 };
-protected:
-   int m_block;   // not used, unlikely to be used, but kept for time being
-   int m_state; 
-   int m_misc; // <- undocounter / point seen register / agent reference number, etc
-   char m_grid_connections; // this is a standard set of grid connections, with bits set for E,NE,N,NW,W,SW,S,SE
-   Node *m_node;            // graph links
-   Point2f m_location;      // note: this is large, but it helps allow loading of non-standard grid points,
-                            // whilst allowing them to be displayed as a visibility graph, also speeds up time to
-                            // display
-   float m_color;           // although display color for the point now introduced
-   PixelRef m_merge;        // to merge with another point
-   PixelRef m_extent;       // used to speed up graph analysis (not sure whether or not it breaks it!)
-   float m_dist;            // used to speed up metric analysis
-   float m_cumangle;        // cummulative angle -- used in metric analysis and angular analysis
-   // hmm... this is for my 3rd attempt at a quick line intersect algo:
-   // every line that goes through the gridsquare -- memory intensive I know, but what can you do:
-   // accuracy is imperative here!  Calculated pre-fillpoints / pre-makegraph, and (importantly) it works.
-   pqmap<int,Line> m_lines; 
-   // and when dynamic lines are being used, the process flag tells you which q octants to reprocess:
-   //
-   // Deprecated, kept for compatibility with previous versions:
-   AttrBody *m_attributes;  // deprecated: now PointMap has an attribute table to handle this
-   pmap<int,int> m_data_objects; // deprecated: (first int is data layer -- presumably the KEY not the index, second int is object ref)
-   //
-   int m_processflag;
-public:
-   Point()
-      { m_state = EMPTY; m_block = 0; m_misc = 0; m_grid_connections = 0; m_node = NULL; m_attributes = NULL; m_processflag = 0; m_merge = NoPixel; m_user_data = NULL; }
-   Point& operator = (const Point& p) 
-      { throw 1; }
-   Point(const Point& p)
-      { throw 1; }
-   ~Point();
-   //
-   bool empty() const
-      { return (m_state & EMPTY) == EMPTY; }
-   bool filled() const
-      { return (m_state & FILLED) == FILLED; }
-   bool blocked() const
-      { return (m_state & BLOCKED) == BLOCKED; }
-   bool contextfilled() const
-      { return (m_state & CONTEXTFILLED) == CONTEXTFILLED; }
-   bool edge() const
-      { return (m_state & EDGE) == EDGE; }
-   bool selected() const
-      { return (m_state & SELECTED) == SELECTED; }
-   //
-   // Augmented Vis
-   bool augmented() const
-      { return (m_state & AUGMENTED) == AUGMENTED; }
-   //
-   void set( int state, int undocounter = 0)
-   { 
-      m_state = state | (m_state & Point::BLOCKED);   // careful not to clear the blocked flag
-      m_misc = undocounter;
-   }
-   void setBlock(bool blocked = true)
-   { 
-      if (blocked)
-         m_state |= Point::BLOCKED; 
-      else
-         m_state &= ~Point::BLOCKED; 
-   }
-   void setEdge()
-   { 
-      m_state |= Point::EDGE;
-   }
-   // old blocking code
-   //void addBlock( int block )
-   //   { m_block |= block; }
-   //void setBlock( int block )
-   //   { m_block = block; }
-   //int getBlock() const
-   //   { return m_block & 0x0000FFFF; }
-   //void addPartBlock( int block )
-   //   { m_block |= (block << 16); }
-   //int getPartBlock() const
-   //   { return (m_block & 0xFFFF0000) >> 16; }
-   //int getAllBlock() const
-   //   { return m_block | (m_block >> 16); }
-   //int fillBlocked() const
-   //   { return m_block & 0x06600660; }
-   int getState()
-      { return m_state; }
-   int getMisc()  // used as: undocounter, in graph construction, and an agent reference, as well as for making axial maps
-      { return m_misc; }
-   void setMisc(int misc)
-      { m_misc = misc; }
-   int getDataObject( int layer ) { 
-      size_t var = m_data_objects.searchindex( layer );
-      if (var != paftl::npos) 
-         return m_data_objects.at(var);
-      return -1;  // note: not paftl::npos
-   }
-   // note -- set merge pixel should be done only through merge pixels
-   PixelRef getMergePixel() {
-      return m_merge;
-   }
-   Node& getNode()
-      { return *m_node; }
-   AttrBody& getAttributes()
-      { return *m_attributes; }
-   void setAttributes(const AttrBody& attr)
-      { if (m_attributes) delete m_attributes;
-        m_attributes = new AttrBody(attr); }
-   char getGridConnections() const
-      { return m_grid_connections; }
-   float getBinDistance(int i);
-public:
-   ifstream& read(ifstream& stream, int version, int attr_count);
-   ofstream& write(ofstream& stream, int version);
-   //
-protected:
-   // for user processing, set their own data on the point:
-   void *m_user_data;
-public:
-   void *getUserData()
-   { return m_user_data; }
-   void setUserData(void *user_data)
-   { m_user_data = user_data; }
-};
+
 
 class sparkSieve2;
 
@@ -220,10 +84,10 @@ private:
    bool m_hasIsovistAnalysis = false;
 protected:
    std::string m_name;
-   Point **m_points;    // will contain the graph reference when created
+   std::vector<Point> m_points;    // will contain the graph reference when created
    //int m_rows;
    //int m_cols;
-   int m_point_count;
+   int m_filled_point_count;
    double m_spacing;
    Point2f m_offset;
    Point2f m_bottom_left;
@@ -233,24 +97,15 @@ protected:
    bool m_processed;
    bool m_boundarygraph;
    int m_undocounter;
-   pqvector<PixelRefPair> m_merge_lines;
+   std::vector<PixelRefPair> m_merge_lines;
    // The attributes table replaces AttrHeader / AttrRow data format
    AttributeTable m_attributes;
 public:
    PointMap(const std::string& name = std::string("VGA Map"));
-   PointMap(const PointMap& pointdata);
-   PointMap& operator = (const PointMap& pointdata);
-   void construct( const PointMap& pointdata );
-   virtual ~PointMap();
    const std::string& getName() const
    { return m_name; }
-   //
-   // Quick mod - TV
-#if defined(_WIN32)
-   void communicate( __time64_t& atime, Communicator *comm, int record );
-#else
+
    void communicate( time_t& atime, Communicator *comm, int record );
-#endif
    // constrain is constrain to existing rows / cols
    PixelRef pixelate( const Point2f& p, bool constrain = true, int scalefactor = 1 ) const;
    Point2f depixelate( const PixelRef& p, double scalefactor = 1.0 ) const;   // Inlined below 
@@ -276,7 +131,7 @@ public:
    bool fillLines();
    void fillLine(const Line& li);
    bool blockLines();
-   void blockLine(int key, const Line& li);
+   void blockLine(const Line& li);
    void unblockLines(bool clearblockedflag = true);
    void addLineDynamic(LineKey ref,const Line& line);
    void removeLineDynamic(LineKey ref,const Line& line);
@@ -289,9 +144,9 @@ public:
    bool canUndo() const
       { return !m_processed && m_undocounter != 0; }
    //
-   bool importPoints(istream& stream);
-   void outputPoints( ostream& stream, char delim );
-   void outputMergeLines(ostream& stream, char delim);
+   bool importPoints(std::istream& stream);
+   void outputPoints(std::ostream& stream, char delim );
+   void outputMergeLines(std::ostream& stream, char delim);
    //
    void makeConstants();
    int  tagState(bool settag, bool sparkgraph = false);
@@ -300,7 +155,7 @@ public:
    bool sparkGraph2( Communicator *comm, bool boundarygraph, double maxdist );
    bool dynamicSparkGraph2();
    bool sparkPixel2(PixelRef curs, int make, double maxdist = -1.0);
-   bool sieve2(sparkSieve2& sieve, pvector<PixelRef>& addlist, int q, int depth, PixelRef curs);
+   bool sieve2(sparkSieve2& sieve, std::vector<PixelRef>& addlist, int q, int depth, PixelRef curs);
    // bool makeGraph( Graph& graph, int optimization_level = 0, Communicator *comm = NULL);
    //
    bool binDisplay(Communicator *comm);
@@ -318,11 +173,11 @@ public:
    void mergeFromShapeMap(const ShapeMap& shapemap);
    bool isPixelMerged(const PixelRef &a);
    //
-   void outputSummary(ostream& myout, char delimiter = '\t');
-   void outputMif( ostream& miffile, ostream& midfile );
-   void outputNet( ostream& netfile );
-   void outputConnections(ostream& myout);
-   void outputBinSummaries(ostream& myout);
+   void outputSummary(std::ostream& myout, char delimiter = '\t');
+   void outputMif(std::ostream& miffile, std::ostream& midfile );
+   void outputNet(std::ostream& netfile );
+   void outputConnections(std::ostream& myout);
+   void outputBinSummaries(std::ostream& myout);
    //
    // scruffy little helper functions
    int u(int i, int x, int s) const
@@ -331,20 +186,17 @@ public:
       { return j + (y * s); }
    int remaining(int i, int j, int x, int y, int q);
    //
-   Point& getPoint(const PixelRef& p) const
-      { return m_points[p.x][p.y]; }
+   const Point& getPoint(const PixelRef& p) const
+      { return m_points[p.x*m_rows + p.y]; }
+   Point& getPoint(const PixelRef& p)
+      { return m_points[p.x*m_rows + p.y]; }
    const int& pointState( const PixelRef& p ) const
-      { return m_points[p.x][p.y].m_state; }
-   const int pointObject( const PixelRef& p, int layer_ref ) const
-      { size_t layer_index = m_points[p.x][p.y].m_data_objects.searchindex(layer_ref);
-        if (layer_index != paftl::npos)
-           return m_points[p.x][p.y].m_data_objects.at(layer_index);
-        return -1; }
+      { return m_points[p.x*m_rows + p.y].m_state; }
    // to be phased out
    bool blockedAdjacent( const PixelRef p ) const;
    //
-   int getPointCount() const
-      { return m_point_count; }
+   int getFilledPointCount() const
+      { return m_filled_point_count; }
    //
    void requireIsovistAnalysis()
    {
@@ -353,7 +205,7 @@ public:
        }
    }
 protected:
-   int expand( const PixelRef p1, const PixelRef p2, PixelRefList& list, int filltype );
+   int expand( const PixelRef p1, const PixelRef p2, PixelRefVector& list, int filltype );
    //
    //void walk( PixelRef& start, int steps, Graph& graph, 
    //           int parity, int dominant_axis, const int grad_pair[] );
@@ -363,7 +215,7 @@ protected:
    enum { NO_SELECTION = 0, SINGLE_SELECTION = 1, COMPOUND_SELECTION = 2, LAYER_SELECTION = 4, OVERRIDE_SELECTION = 8 };
    int m_selection;
    bool m_pinned_selection;
-   pvecint m_selection_set;      // n.b., m_selection_set stored as int for compatibility with other map layers
+   std::set<int> m_selection_set;      // n.b., m_selection_set stored as int for compatibility with other map layers
    mutable PixelRef s_bl; 
    mutable PixelRef s_tr;
 public:
@@ -373,18 +225,18 @@ public:
       { return m_pinned_selection; }
    bool clearSel(); // clear the current selection
    bool setCurSel( QtRegion& r, bool add = false ); // set current selection
-   bool setCurSel( const pvecint& selset, bool add = false );
+   bool setCurSel(const std::vector<int> &selset, bool add = false );
    bool overrideSelPixel(PixelRef pix);    // set a pixel to selected: careful!
    //bool togglePin();
    //bool convertSelToDataObject( MetaGraph& meta_graph );
    // Note: passed by ref, use with care in multi-threaded app
-   pvecint& getSelSet()
+   std::set<int>& getSelSet()
       { return m_selection_set; }
-   const pvecint& getSelSet() const
+   const std::set<int>& getSelSet() const
       { return m_selection_set; }
    //
-   PixelRefList getLayerPixels(int layer);
-   PixelRefList getDataObjectPixels(int layer, int object);
+   PixelRefVector getLayerPixels(int layer);
+   PixelRefVector getDataObjectPixels(int layer, int object);
    //
    // Attribute functionality
 protected:
@@ -469,7 +321,9 @@ public:
    bool findNextPoint() const;
    Point2f getNextPointLocation() const
    { return getPoint(cur).m_location; }
-   Point& getNextPoint() const
+   const Point& getNextPoint() const
+   { return getPoint(cur); }
+   Point& getNextPoint()
    { return getPoint(cur); }
    bool findNextRow() const;
    Line getNextRow() const;
@@ -496,11 +350,11 @@ public:
    // this is an odd helper function, value in range 0 to 1
    PixelRef pickPixel(double value) const;
 public:
-   bool read( ifstream& stream, int version );
-   bool write( ofstream& stream, int version );
-   void convertAttributes( int which_attributes );
+   bool read(std::istream &stream, int version );
+   bool write(std::ofstream& stream, int version );
    void addGridConnections(); // adds grid connections where graph does not include them
-   void outputConnectionsAsCSV(ostream &myout, std::string delim = ",");
+   void outputConnectionsAsCSV(std::ostream &myout, std::string delim = ",");
+   void outputLinksAsCSV(std::ostream &myout, std::string delim = ",");
 };
 
 // inlined to make thread safe
@@ -520,38 +374,6 @@ inline QtRegion PointMap::regionate( const PixelRef& p, double border ) const
                   m_bottom_left.y + m_spacing * (double(p.y) + 0.5 + border))
       );
 }
-
-/////////////////////////////////////////////////////////////////////////////////////
-
-class PointMaps : public prefvec<PointMap>
-{
-protected:
-   int m_displayed_map;
-   SuperSpacePixel *m_spacepix;
-public:
-   PointMaps() { m_displayed_map = -1; m_spacepix = NULL; }
-   virtual ~PointMaps() {;}
-   //
-   void setDisplayedPointMapRef(int i) 
-   { m_displayed_map = i; }
-   PointMap& getDisplayedPointMap()
-   { return at(m_displayed_map); }
-   const PointMap& getDisplayedPointMap() const
-   { return at(m_displayed_map); }
-   int getDisplayedPointMapRef() const
-   { return m_displayed_map; }
-   int addNewMap(const std::string& name = std::string("VGA Map"));
-   void removeMap(int i) 
-   { if (m_displayed_map >= i) m_displayed_map--; remove_at(i); }
-   //
-   void setSpacePixel(SuperSpacePixel *spacepix)
-   { m_spacepix = spacepix; for (size_t i = 0; i < size(); i++) at(i).setSpacePixel(spacepix); }
-   void redoBlockLines()   // (flags blockedlines, but also flags that you need to rebuild a bsp tree if you have one)
-   { for (size_t i = 0; i < size(); i++) { at(i).m_blockedlines = false; } }
-   //
-   bool read( ifstream& stream, int version );
-   bool write( ofstream& stream, int version, bool displayedmaponly = false );
-};
 
 /////////////////////////////////////////////////////////////////////////////////////
 
@@ -805,24 +627,7 @@ inline int whichbin( const Point2f& grad )
    else {
       bin += 4;
    }
-   /*
-   // True angular bins
-   if (ratio <      0.0984914033571642) {   // 1/64
-      // nop
-   }
-   else if (ratio < 0.3033466836073423) {   // 3/64
-      bin += 1;
-   }
-   else if (ratio < 0.5345111359507916) {   // 5/64
-      bin += 2;
-   }
-   else if (ratio < 0.8206787908286603) {   // 7/64
-      bin += 3;
-   }
-   else {
-      bin += 4;
-   }
-   */
+
    if (bin < 0) {
       bin = -bin;
    }

@@ -32,12 +32,7 @@ bool ShapeGraph::analyseTopoMet(Communicator *comm, int analysis_type, double ra
 {
    bool retvar = true;
 
-   // Quick mod - TV
-#if defined(_WIN32)   
-   __time64_t atime = 0;
-#else
    time_t atime = 0;
-#endif   
 
    if (comm) {
       qtimer( atime, 0 );
@@ -279,9 +274,8 @@ bool ShapeGraph::analyseTopoMetPD(Communicator *comm, int analysis_type)
    {
       seen[i] = 0xffffffff;
    }
-   for (size_t i = 0; i < getSelCount(); i++)
+   for (auto& cursor: getSelSet())
    {
-      size_t cursor = getSelSet().at(i);
       seen[cursor] = 0;
       open++;
       double length = seglengths[cursor];

@@ -30,19 +30,19 @@ TEST_CASE("Test getVisibleLines", "")
     Point2f hiddenLineEnd(3,5);
 
     // push a SpacePixelFile in the MetaGraph
-    mgraph->SuperSpacePixel::push_back(SpacePixelFile("Test SpacePixelFile"));
+    mgraph->m_spacePixels.emplace_back("Test SpacePixelFile");
 
     // push a ShapeMap in the SpacePixelFile
-    mgraph->SuperSpacePixel::tail().push_back(ShapeMap("Visible ShapeMap"));
+    mgraph->m_spacePixels.back().m_spacePixels.emplace_back("Visible ShapeMap");
 
     // add a line to the first ShapeMap
-    mgraph->SuperSpacePixel::tail().tail().makeLineShape(Line(visibleLineStart, visibleLineEnd));
+    mgraph->m_spacePixels.back().m_spacePixels.back().makeLineShape(Line(visibleLineStart, visibleLineEnd));
 
     // push a ShapeMap in the SpacePixelFile
-    mgraph->SuperSpacePixel::tail().push_back(ShapeMap("Hidden ShapeMap"));
+    mgraph->m_spacePixels.back().m_spacePixels.emplace_back("Hidden ShapeMap");
 
     // add a line to the second ShapeMap
-    mgraph->SuperSpacePixel::tail().tail().makeLineShape(Line(hiddenLineStart, hiddenLineEnd));
+    mgraph->m_spacePixels.back().m_spacePixels.back().makeLineShape(Line(hiddenLineStart, hiddenLineEnd));
 
     SECTION( "Get visible lines when none is hidden" )
     {
@@ -64,7 +64,7 @@ TEST_CASE("Test getVisibleLines", "")
     SECTION( "Get visible lines when some are hidden" )
     {
         // now hide the second SpacePixelFile
-        mgraph->SuperSpacePixel::tail().tail().setShow(false);
+        mgraph->m_spacePixels.back().m_spacePixels.back().setShow(false);
 
         const std::vector<SimpleLine>& visibleLines = mgraph->getVisibleDrawingLines();
 
@@ -73,5 +73,37 @@ TEST_CASE("Test getVisibleLines", "")
         REQUIRE(visibleLines[0].start().y == Approx(visibleLineStart.y).epsilon(EPSILON));
         REQUIRE(visibleLines[0].end().x == Approx(visibleLineEnd.x).epsilon(EPSILON));
         REQUIRE(visibleLines[0].end().y == Approx(visibleLineEnd.y).epsilon(EPSILON));
+    }
+}
+
+TEST_CASE("Test pointMaps", "")
+{
+    std::unique_ptr<MetaGraph> mgraph(new MetaGraph());
+    int pointMapIdx = mgraph->addNewPointMap("Kenny");
+    REQUIRE(mgraph->getPointMaps().size() == 1);
+    REQUIRE(pointMapIdx == 0);
+    REQUIRE(mgraph->getPointMaps()[0].getName() == "Kenny");
+    REQUIRE(mgraph->getDisplayedPointMapRef() == pointMapIdx);
+    REQUIRE(mgraph->getDisplayedPointMap().getName() == "Kenny");
+
+    SECTION( "Add another and remove the first through the MetaGraph" )
+    {
+        int pointMapIdx = mgraph->addNewPointMap("Stan");
+        REQUIRE(mgraph->getPointMaps().size() == 2);
+        REQUIRE(pointMapIdx == 1);
+        REQUIRE(mgraph->getPointMaps()[1].getName() == "Stan");
+        REQUIRE(mgraph->getDisplayedPointMapRef() == 1);
+        REQUIRE(mgraph->getDisplayedPointMap().getName() == "Stan");
+
+        mgraph->setState(MetaGraph::POINTMAPS);
+        mgraph->setViewClass(MetaGraph::SHOWVGATOP);
+        mgraph->setDisplayedPointMapRef(0);
+        REQUIRE(mgraph->getDisplayedPointMapRef() == 0);
+        REQUIRE(mgraph->getDisplayedPointMap().getName() == "Kenny");
+
+        mgraph->removeDisplayedMap();
+        REQUIRE(mgraph->getPointMaps().size() == 1);
+        REQUIRE(mgraph->getPointMaps()[0].getName() == "Stan");
+        REQUIRE(mgraph->getDisplayedPointMapRef() == 0);
     }
 }

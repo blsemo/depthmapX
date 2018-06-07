@@ -336,8 +336,9 @@ void QDepthmapView::paintEvent(QPaintEvent *)
       return;
    }*/
 
-   if (!m_pDoc.m_meta_graph->setLock(this)) {
-      return;
+   auto lock = m_pDoc.m_meta_graph->getLockDeferred();
+   if (!lock.try_lock()){
+       return;
    }
 
    m_drawing = true;
@@ -468,8 +469,6 @@ void QDepthmapView::paintEvent(QPaintEvent *)
    }
 
    m_drawing = false;
-   m_pDoc.m_meta_graph->releaseLock(this);
-
    QPainter screenPainter(this);
    screenPainter.drawPixmap(0,0,width(),height(),*m_pixmap);
 }
@@ -530,7 +529,7 @@ void QDepthmapView::mouseMoveEvent(QMouseEvent *e)
                ShapeMap& map = graph->getLineLayer(i,j);
                if (map.isShown()) {
                   Point2f px = map.getClosestVertex(p);
-                  if (!px.isNull() && (d == -1 || dist(p,px) < d)) {
+                  if (!px.atZero() && (d == -1 || dist(p,px) < d)) {
                      d = dist(p,px);
                      m_snap_point = px;
                   }
@@ -1027,7 +1026,7 @@ void QDepthmapView::mouseReleaseEvent(QMouseEvent *e)
 			 update();
 			 // if it's the first part, just make it a line:
 			 if (m_poly_points == 0) {
-                m_pDoc.m_meta_graph->polyBegin(Line(m_line.t_start(),location));
+                m_currentlyEditingShapeRef = m_pDoc.m_meta_graph->polyBegin(Line(m_line.t_start(),location));
 				m_poly_start = m_line.t_start();
 				m_poly_points += 2;
 				m_mouse_mode |= DRAWLINE;
@@ -1037,11 +1036,12 @@ void QDepthmapView::mouseReleaseEvent(QMouseEvent *e)
 			 }
 			 else if (m_poly_points > 2 && PixelDist(point,PhysicalUnits(m_poly_start)) < 6) {
 				// check to see if it's back to the original start point, if so, close off
-                m_pDoc.m_meta_graph->polyClose();
+                m_pDoc.m_meta_graph->polyClose(m_currentlyEditingShapeRef);
 				m_poly_points = 0;
+                m_currentlyEditingShapeRef = -1;
 			 }
 			 else {
-                m_pDoc.m_meta_graph->polyAppend(location);
+                m_pDoc.m_meta_graph->polyAppend(m_currentlyEditingShapeRef, location);
 				m_poly_points += 1;
 				m_mouse_mode |= DRAWLINE;
 				m_line = Line(location, location);
@@ -1119,7 +1119,8 @@ void QDepthmapView::mouseReleaseEvent(QMouseEvent *e)
 				m_mouse_mode &= ~DRAWLINE;
 				if (m_mouse_mode & POLYGONTOOL && m_poly_points > 0) {
 					m_poly_points = 0;
-                    m_pDoc.m_meta_graph->polyCancel();
+                    m_currentlyEditingShapeRef = -1;
+                    m_pDoc.m_meta_graph->polyCancel(m_currentlyEditingShapeRef);
                     m_pDoc.SetRedrawFlag(QGraphDoc::VIEW_ALL, QGraphDoc::REDRAW_GRAPH, QGraphDoc::NEW_DATA );
 				}
 				else {
@@ -1319,12 +1320,12 @@ bool QDepthmapView::Output(QPainter *pDC, QGraphDoc *pDoc, bool screendraw)
          }
          else {
 		    size_t i;
-            for (i = 1; i < shape.size(); i++) 
+            for (i = 1; i < shape.m_points.size(); i++)
 			{
-               pDC->drawLine(PhysicalUnits(shape[i-1]), PhysicalUnits(shape[i]));
+               pDC->drawLine(PhysicalUnits(shape.m_points[i-1]), PhysicalUnits(shape.m_points[i]));
             }
             if (shape.isClosed()) {
-               pDC->drawLine(PhysicalUnits(shape[i-1]), PhysicalUnits(shape[0]));
+               pDC->drawLine(PhysicalUnits(shape.m_points[i-1]), PhysicalUnits(shape.m_points[0]));
             }
          }
       }
@@ -1516,11 +1517,12 @@ bool QDepthmapView::DrawShapes(QPainter *pDC, ShapeMap& map, bool muted, int spa
       const SalaShape& poly = map.getNextShape();
       QPoint *points = NULL;
       int drawable = 0;
-      if (!poly.isPoint() && !poly.isLine()) {
-         points = new QPoint [poly.size()];
-         for (size_t i = 0; i < poly.size(); i++) {
-            points[drawable] = PhysicalUnits(poly[i]);
-            if (i == 0 || points[drawable] != points[drawable-1]) {
+      if (!poly.isPoint() && !poly.isLine() && !poly.m_points.empty()) {
+         points = new QPoint [poly.m_points.size()];
+         if (poly.m_points.size() > 0) drawable++;
+         for (auto& point: poly.m_points) {
+            points[drawable] = PhysicalUnits(point);
+            if (points[drawable] != points[drawable-1]) {
                drawable++;
             }
          }
@@ -1671,7 +1673,7 @@ void QDepthmapView::DrawPointHandle(QPainter *pDC, QPoint pt)
    pDC->drawRect(rect);
 }
 
-void QDepthmapView::OutputEPS( ofstream& stream, QGraphDoc *pDoc, bool includeScale )
+void QDepthmapView::OutputEPS( std::ofstream& stream, QGraphDoc *pDoc, bool includeScale )
 {
    // This output EPS is a copy of the standard output... obviously, if you change
    // standard output, remember to change this one too!
@@ -1688,7 +1690,7 @@ void QDepthmapView::OutputEPS( ofstream& stream, QGraphDoc *pDoc, bool includeSc
 
    stream << "%!PS-Adobe-3.0 EPSF-3.0\n"
           << "%%BoundingBox: 0 0 " << clrect.width() << " " << clrect.height() << "\n"
-          << "%%Creator: depthmapX " << DEPTHMAPX_VERSION << "." << DEPTHMAPX_MINOR_VERSION << endl;
+          << "%%Creator: " << TITLE_BASE << std::endl;
 
    // temporarily inflate resolution for EPS draw
    rect = QRect(clrect.left() * 10, clrect.top() * 10, clrect.width() * 10, clrect.height() * 10);
@@ -1707,11 +1709,11 @@ void QDepthmapView::OutputEPS( ofstream& stream, QGraphDoc *pDoc, bool includeSc
    float fgg = float(GetGValue(fg))/255.0f;
    float fgb = float(GetBValue(fg))/255.0f;
    
-   stream << "/M {moveto} def" << endl;
-   stream << "/L {lineto} def" << endl;
-   stream << "/R {rlineto} def" << endl;
-   stream << "/C {setrgbcolor} def" << endl;
-   stream << "/W {setlinewidth} def" << endl;
+   stream << "/M {moveto} def" << std::endl;
+   stream << "/L {lineto} def" << std::endl;
+   stream << "/R {rlineto} def" << std::endl;
+   stream << "/C {setrgbcolor} def" << std::endl;
+   stream << "/W {setlinewidth} def" << std::endl;
 
    stream << "newpath\n"
           << 0 << " " << 0 << " M\n"
@@ -1720,7 +1722,7 @@ void QDepthmapView::OutputEPS( ofstream& stream, QGraphDoc *pDoc, bool includeSc
           << -clrect.width() << " " << 0 << " R\n"
           << "closepath\n"
           << bgr << " " << bgg << " " << bgb << " C\n"
-          << "fill" << endl;
+          << "fill" << std::endl;
 
    int state = pDoc->m_meta_graph->getState();
 
@@ -1753,9 +1755,9 @@ void QDepthmapView::OutputEPS( ofstream& stream, QGraphDoc *pDoc, bool includeSc
              << "   " <<  2 * spacer << " " << 0 << " R\n"
              << "   " <<  0 << " " << 2 * spacer << " R\n"
              << "   " <<  2 * -spacer << " " << 0 << " R\n" 
-             << "   closepath } def" << endl;
+             << "   closepath } def" << std::endl;
       stream << "/fbx\n"
-             << " { C fill } def" << endl;
+             << " { C fill } def" << std::endl;
 
       PointMap& map = pDoc->m_meta_graph->getDisplayedPointMap();
 
@@ -1770,8 +1772,8 @@ void QDepthmapView::OutputEPS( ofstream& stream, QGraphDoc *pDoc, bool includeSc
             QPoint p = PhysicalUnits(logical);
 
             // Now do EPS box... remember the coordinate system is the right way up!
-            stream << p.x() / 10.0 - spacer << " " << (rect.height() - p.y()) / 10.0 - spacer << " bx" << endl;
-            stream << color.redf() << " " << color.greenf() << " " << color.bluef() << " fbx" << endl;
+            stream << p.x() / 10.0 - spacer << " " << (rect.height() - p.y()) / 10.0 - spacer << " bx" << std::endl;
+            stream << color.redf() << " " << color.greenf() << " " << color.bluef() << " fbx" << std::endl;
          }
       }
    }
@@ -1792,7 +1794,7 @@ void QDepthmapView::OutputEPS( ofstream& stream, QGraphDoc *pDoc, bool includeSc
 
    if (state & MetaGraph::LINEDATA) {
 
-      stream << "newpath" << endl;
+      stream << "newpath" << std::endl;
       bool nextlayer = false;
       bool first = true;
       int style = 0;
@@ -1823,16 +1825,16 @@ void QDepthmapView::OutputEPS( ofstream& stream, QGraphDoc *pDoc, bool includeSc
       else {
          stream << "[]";
       }
-      stream << " 0 setdash" << endl;
-      stream << fgr << " " << fgg << " " << fgb << " C" << endl;
-      stream << spacer/10+1 << " W" << endl;
-      stream << "stroke" << endl;
+      stream << " 0 setdash" << std::endl;
+      stream << fgr << " " << fgg << " " << fgb << " C" << std::endl;
+      stream << spacer/10+1 << " W" << std::endl;
+      stream << "stroke" << std::endl;
    }
 
    // loaded paths
    if (pDoc->m_evolved_paths.size()) {
 
-      stream << "newpath" << endl;
+      stream << "newpath" << std::endl;
 
       for (size_t i = 0; i < pDoc->m_evolved_paths.size(); i++) {
 
@@ -1841,17 +1843,17 @@ void QDepthmapView::OutputEPS( ofstream& stream, QGraphDoc *pDoc, bool includeSc
          if (path.size() > 1) {
 
             QPoint last = PhysicalUnits(path[0]);
-            stream << (last.x() - spacer/40) / 10.0 << " " << (rect.height() - last.y() + spacer/40) / 10.0 << " M\n" << endl;
+            stream << (last.x() - spacer/40) / 10.0 << " " << (rect.height() - last.y() + spacer/40) / 10.0 << " M\n" << std::endl;
 
             for (size_t j = 1; j < path.size(); j++) {
                QPoint next = PhysicalUnits(path[j]);
-               stream << (next.x() - last.x() - spacer/40) / 10.0 << " " << (last.y() - next.y() - spacer/40) / 10.0 << " L" << endl;
+               stream << (next.x() - last.x() - spacer/40) / 10.0 << " " << (last.y() - next.y() - spacer/40) / 10.0 << " L" << std::endl;
                last = next;
             }
 
-            stream << fgr << " " << fgg << " " << fgb << " C" << endl;
-            stream << spacer/20+1 << " W" << endl;
-            stream << "stroke" << endl;
+            stream << fgr << " " << fgg << " " << fgb << " C" << std::endl;
+            stream << spacer/20+1 << " W" << std::endl;
+            stream << "stroke" << std::endl;
          }
       }
    }
@@ -1869,17 +1871,17 @@ void QDepthmapView::OutputEPS( ofstream& stream, QGraphDoc *pDoc, bool includeSc
             QPoint p = PhysicalUnits(Point2f(logical.x, logical.y));
             QPoint bottomleft = PhysicalUnits(Point2f(logical.x - 0.5, logical.y - 0.5));
             // Now do EPS box... remember the coordinate system is the right way up!
-            stream << (p.x - spacer) / 10.0 << " " << (rect.Height() - p.y - spacer) / 10.0 << " bx" << endl;
-            stream << bgr << " " << bgg << " " << bgb << " fbx" << endl;
+            stream << (p.x - spacer) / 10.0 << " " << (rect.Height() - p.y - spacer) / 10.0 << " bx" << std::endl;
+            stream << bgr << " " << bgg << " " << bgb << " fbx" << std::endl;
             // And cover with line:
             stream << (bottomleft.x - spacer/20) / 10.0 << " " << (rect.Height() - bottomleft.y + spacer/20) / 10.0 << " M\n"
                    << (spacer * 2 - spacer/20) / 10.0 << " " << 0 << " L\n"
                    << 0 << " " << (spacer * 2 - spacer/20) / 10.0 << " L\n"
                    << (-spacer * 2 + spacer/20) / 10.0 << " " << 0 << " L\n"
-                   << 0 << " " << (-spacer * 2 + spacer/20) / 10.0 << " L" << endl;
-            stream << fgr << " " << fgg << " " << fgb << " setrgbcolor" << endl;
-            stream << spacer/10+1 << " setlinewidth" << endl;
-            stream << "stroke" << endl;
+                   << 0 << " " << (-spacer * 2 + spacer/20) / 10.0 << " L" << std::endl;
+            stream << fgr << " " << fgg << " " << fgb << " setrgbcolor" << std::endl;
+            stream << spacer/10+1 << " setlinewidth" << std::endl;
+            stream << "stroke" << std::endl;
          }
       }
    }
@@ -1892,40 +1894,40 @@ void QDepthmapView::OutputEPS( ofstream& stream, QGraphDoc *pDoc, bool includeSc
           int workingwidth = floor(log10(logicalwidth/2)*2.0);
           int barwidth = (int) pow(10.0,(double)(workingwidth/2)) * ((workingwidth%2 == 0) ? 1 : 5);
           double physicalbar = double(barwidth) / m_unit;
-          stream << "newpath" << endl;
-          stream << "0 0 M 0 18 R" << endl;
-          stream << physicalbar / 10.0 << " 0 R 0 -18 R closepath" << endl;
-          stream << bgr << " " << bgg << " " << bgb << " C" << endl;
-          stream << "fill newpath" << endl;
-          stream << fgr << " " << fgg << " " << fgb << " C" << endl;
-          stream << "0 12 M" << endl;
-          stream << physicalbar / 10.0 << " 0 R" << endl;
-          stream << "3 W stroke" << endl;
-          stream << "0 6 M 0 7.5 R" << endl;
-          stream << physicalbar / 10.0 << " 6 M 0 7.5 R" << endl;
-          stream << "1.5 W stroke" << endl;
-          stream << "/Arial findfont 12 scalefont setfont" << endl;
+          stream << "newpath" << std::endl;
+          stream << "0 0 M 0 18 R" << std::endl;
+          stream << physicalbar / 10.0 << " 0 R 0 -18 R closepath" << std::endl;
+          stream << bgr << " " << bgg << " " << bgb << " C" << std::endl;
+          stream << "fill newpath" << std::endl;
+          stream << fgr << " " << fgg << " " << fgb << " C" << std::endl;
+          stream << "0 12 M" << std::endl;
+          stream << physicalbar / 10.0 << " 0 R" << std::endl;
+          stream << "3 W stroke" << std::endl;
+          stream << "0 6 M 0 7.5 R" << std::endl;
+          stream << physicalbar / 10.0 << " 6 M 0 7.5 R" << std::endl;
+          stream << "1.5 W stroke" << std::endl;
+          stream << "/Arial findfont 12 scalefont setfont" << std::endl;
           // assume metres!
           if (barwidth > 1000) {
-             stream << "(" << (barwidth / 1000) << "km) stringwidth pop 2 div" << endl;
+             stream << "(" << (barwidth / 1000) << "km) stringwidth pop 2 div" << std::endl;
           }
           else {
-             stream << "(" << barwidth << "m) stringwidth pop 2 div" << endl;
+             stream << "(" << barwidth << "m) stringwidth pop 2 div" << std::endl;
           }
-          stream << physicalbar / 20.0 << " exch sub" << endl;
-          stream << "0 M" << endl;
-          stream << "(" << barwidth << "m) show" << endl;
+          stream << physicalbar / 20.0 << " exch sub" << std::endl;
+          stream << "0 M" << std::endl;
+          stream << "(" << barwidth << "m) show" << std::endl;
        }
    }
 
-   stream << "showpage" << endl;
+   stream << "showpage" << std::endl;
 
    // undo temporary unit setting
    m_unit = oldunit;
    m_physical_centre = QSize(oldcentre.x(), oldcentre.y()) ;
 }
 
-void QDepthmapView::OutputEPSMap(ofstream& stream, ShapeMap& map, QtRegion& logicalviewport, QRect& rect, float spacer)
+void QDepthmapView::OutputEPSMap(std::ofstream& stream, ShapeMap& map, QtRegion& logicalviewport, QRect& rect, float spacer)
 {
    bool monochrome = (map.getDisplayParams().colorscale == DisplayParams::MONOCHROME);
    double thickness = 1.0, oldthickness = 1.0;
@@ -1937,8 +1939,8 @@ void QDepthmapView::OutputEPSMap(ofstream& stream, ShapeMap& map, QtRegion& logi
    float fgg = float(GetGValue(fg))/255.0f;
    float fgb = float(GetBValue(fg))/255.0f;
 
-   stream << "newpath" << endl;
-   stream << fgr << " " << fgg << " " << fgb << " C" << endl;
+   stream << "newpath" << std::endl;
+   stream << fgr << " " << fgg << " " << fgb << " C" << std::endl;
    bool dummy;
    while ( map.findNextShape(dummy) ) {
 
@@ -1954,15 +1956,15 @@ void QDepthmapView::OutputEPSMap(ofstream& stream, ShapeMap& map, QtRegion& logi
             continue;
          }
          if (thickness != oldthickness || closed != oldclosed) {
-            stream << oldthickness << " W" << endl;
-            stream << (oldclosed ? "fill" : "stroke") << endl;
+            stream << oldthickness << " W" << std::endl;
+            stream << (oldclosed ? "fill" : "stroke") << std::endl;
             oldthickness = thickness;
             oldclosed = closed;
          }
       }
       else if (color != oldcolor || closed != oldclosed) {
-         stream << oldcolor.redf() << " " << oldcolor.greenf() << " " << oldcolor.bluef() << " C" << endl;
-         stream << (oldclosed ? "fill" : "stroke") << endl;
+         stream << oldcolor.redf() << " " << oldcolor.greenf() << " " << oldcolor.bluef() << " C" << std::endl;
+         stream << (oldclosed ? "fill" : "stroke") << std::endl;
          oldcolor = color;
          oldclosed = closed;
       }
@@ -1978,14 +1980,14 @@ void QDepthmapView::OutputEPSMap(ofstream& stream, ShapeMap& map, QtRegion& logi
          OutputEPSPoly(stream, shape, spacer, logicalviewport, rect);
       }
    }
-   stream << thickness << " W" << endl;
+   stream << thickness << " W" << std::endl;
    if (!monochrome) {
-      stream << color.redf() << " " << color.greenf() << " " << color.bluef() << " C" << endl;
+      stream << color.redf() << " " << color.greenf() << " " << color.bluef() << " C" << std::endl;
    }
-   stream << (closed ? "fill" : "stroke") << endl;
+   stream << (closed ? "fill" : "stroke") << std::endl;
 }
 
-void QDepthmapView::OutputEPSLine(ofstream& stream, Line& line, int spacer, QtRegion& logicalviewport, QRect& rect)
+void QDepthmapView::OutputEPSLine(std::ofstream& stream, Line& line, int spacer, QtRegion& logicalviewport, QRect& rect)
 {
    bool drewit = false;
    if (line.crop(logicalviewport)) {
@@ -1995,19 +1997,19 @@ void QDepthmapView::OutputEPSLine(ofstream& stream, Line& line, int spacer, QtRe
       if (sqrt(sqr(start.x() - end.x()) + sqr(start.y() - end.y())) > 5.0)
 	  {
          stream << (start.x() / 10.0) << " " << (rect.height() - start.y()) / 10.0 << " M ";
-         stream << (end.x() / 10.0) << " " << (rect.height() - end.y()) / 10.0 << " L" << endl;
+         stream << (end.x() / 10.0) << " " << (rect.height() - end.y()) / 10.0 << " L" << std::endl;
       }
    }
 }
 
-void QDepthmapView::OutputEPSPoly(ofstream& stream, const SalaShape& shape, int spacer, QtRegion& logicalviewport, QRect& rect)
+void QDepthmapView::OutputEPSPoly(std::ofstream& stream, const SalaShape& shape, int spacer, QtRegion& logicalviewport, QRect& rect)
 {
    bool starter = true;
-   Point2f lastpoint = shape[0];
-   int count = shape.isClosed() ? shape.size() + 1 : shape.size();
-   int size = shape.size();
+   Point2f lastpoint = shape.m_points[0];
+   int count = shape.isClosed() ? shape.m_points.size() + 1 : shape.m_points.size();
+   int size = shape.m_points.size();
    for (int i = 1; i < count; i++) {
-      Line line(lastpoint,shape[i%size]);
+      Line line(lastpoint,shape.m_points[i%size]);
       if (line.crop(logicalviewport)) {
          // note: use t_start and t_end so that this line moves in the correct direction
          QPoint start = PhysicalUnits(line.t_start());
@@ -2018,14 +2020,14 @@ void QDepthmapView::OutputEPSPoly(ofstream& stream, const SalaShape& shape, int 
             if (starter) {
                stream << start.x() / 10.0 << " " << (rect.height() - start.y()) / 10.0 << " M ";
             }
-            stream << end.x() / 10.0 << " " << (rect.height() - end.y()) / 10.0 << " L" << endl;
+            stream << end.x() / 10.0 << " " << (rect.height() - end.y()) / 10.0 << " L" << std::endl;
             // note: you must use t_end (true end) so that it takes the end point from the shape[i] end:
             lastpoint = line.t_end();
             starter = false;
          }
       }
       else {
-         lastpoint = shape[i];
+         lastpoint = shape.m_points[i];
          starter = true;
       }
    }
@@ -2419,7 +2421,7 @@ void QDepthmapView::OnEditSave()
   FILE* fp = fopen(outfile.toLatin1(), "wb");
   fclose(fp);
 
-  ofstream stream( outfile.toLatin1() );
+  std::ofstream stream( outfile.toLatin1() );
   if (stream.fail()) {
      QMessageBox::warning(this, tr("Warning"), tr("Sorry, unable to open ") + outfile + tr(" for writing"), QMessageBox::Ok, QMessageBox::Ok );
      return;
@@ -2453,13 +2455,13 @@ void QDepthmapView::closeEvent(QCloseEvent *event)
 }
 
 
-static string SVGColor(PafColor color)
+static std::string SVGColor(PafColor color)
 {
-   stringstream text;
+   std::stringstream text;
    int r = color.redb();
    int g = color.greenb();
    int b = color.blueb();
-   text << setfill('0') << "#" << setw(2) << std::hex << r << setw(2) << std::hex << g<< setw(2) << std::hex << b;
+   text << std::setfill('0') << "#" << std::setw(2) << std::hex << r << std::setw(2) << std::hex << g<< std::setw(2) << std::hex << b;
    return text.str();
 }
 
@@ -2471,7 +2473,7 @@ static QPoint SVGPhysicalUnits(const Point2f& p, const QtRegion& r, int h)
       );
 }
 
-void QDepthmapView::OutputSVG( ofstream& stream, QGraphDoc *pDoc )
+void QDepthmapView::OutputSVG( std::ofstream& stream, QGraphDoc *pDoc )
 {
    // This output SVG is a copy of the standard output... obviously, if you change
    // standard output, remember to change this one too!
@@ -2490,19 +2492,19 @@ void QDepthmapView::OutputSVG( ofstream& stream, QGraphDoc *pDoc )
    // we'll make this 24cm wide whatever, and base the height on it:
    int h = (4800 * rect.height()) / rect.width();
 
-   stream << "<?xml version=\"1.0\" standalone=\"no\"?>" << endl;
-   stream << "<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\"" << endl;
-   stream << "\"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">" << endl;
-   stream << "<svg width=\"24cm\" height=\"" << (h/200) << "cm\" viewBox=\"0 0 4800 " << h << "\"" << endl;
-   stream << "xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" version=\"1.1\">" << endl;
-   stream << "<desc>depthmapX " << DEPTHMAPX_VERSION << "." << DEPTHMAPX_MINOR_VERSION << "</desc>" << endl;
+   stream << "<?xml version=\"1.0\" standalone=\"no\"?>" << std::endl;
+   stream << "<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\"" << std::endl;
+   stream << "\"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">" << std::endl;
+   stream << "<svg width=\"24cm\" height=\"" << (h/200) << "cm\" viewBox=\"0 0 4800 " << h << "\"" << std::endl;
+   stream << "xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" version=\"1.1\">" << std::endl;
+   stream << "<desc>" << TITLE_BASE << "</desc>" << std::endl;
 
    // note, SVG draw completely overrides standard draw physical units to achieve hi-res output
    // (EPS should probably follow this model too)
    QtRegion logicalviewport = LogicalViewport(rect, pDoc);
 
    stream << "<rect x=\"0\" y=\"0\" width=\"4800\" height=\"" << h << "\" "
-          << "fill=\"" << SVGColor(m_background) << "\" stroke=\"none\" stroke-width=\"0\" />" << endl;
+          << "fill=\"" << SVGColor(m_background) << "\" stroke=\"none\" stroke-width=\"0\" />" << std::endl;
 
    int state = pDoc->m_meta_graph->getState();
 
@@ -2527,9 +2529,9 @@ void QDepthmapView::OutputSVG( ofstream& stream, QGraphDoc *pDoc )
       double spacing = map.getSpacing();
       double spacer = 4800.0 * (spacing/logicalviewport.width()) / 2.0;
 
-      stream << "<g stroke=\"none\">" << endl;
+      stream << "<g stroke=\"none\">" << std::endl;
 
-      stream << "<defs><rect id=\"a\" width=\"" << 2 * spacer << "\" height=\"" << 2 * spacer << "\" /></defs>" << endl;
+      stream << "<defs><rect id=\"a\" width=\"" << 2 * spacer << "\" height=\"" << 2 * spacer << "\" /></defs>" << std::endl;
 
       while ( map.findNextPoint() ) {
 
@@ -2540,10 +2542,10 @@ void QDepthmapView::OutputSVG( ofstream& stream, QGraphDoc *pDoc )
 
             QPoint p = SVGPhysicalUnits(logical,logicalviewport,h);
 
-            stream << "<use fill=\"" << SVGColor(color) << "\" x=\"" << p.x() - spacer << "\" y=\"" << p.y() - spacer << "\" xlink:href=\"#a\" />" << endl;
+            stream << "<use fill=\"" << SVGColor(color) << "\" x=\"" << p.x() - spacer << "\" y=\"" << p.y() - spacer << "\" xlink:href=\"#a\" />" << std::endl;
          }
       }
-      stream << "</g>" << endl;
+      stream << "</g>" << std::endl;
    }
 
    if (state & MetaGraph::SHAPEGRAPHS && pDoc->m_meta_graph->getViewClass() & MetaGraph::VIEWAXIAL) {
@@ -2562,7 +2564,7 @@ void QDepthmapView::OutputSVG( ofstream& stream, QGraphDoc *pDoc )
 
    if (state & MetaGraph::LINEDATA) {
       // arbitrary stroke width for now
-      stream << "<g stroke-width=\"4\" fill=\"none\" stroke=\"" << SVGColor(m_foreground) << "\">" << endl;
+      stream << "<g stroke-width=\"4\" fill=\"none\" stroke=\"" << SVGColor(m_foreground) << "\">" << std::endl;
       bool nextlayer = false;
       while ( pDoc->m_meta_graph->SuperSpacePixel::findNextShape(nextlayer) ) {
          const SalaShape& shape = pDoc->m_meta_graph->SuperSpacePixel::getNextShape();
@@ -2577,14 +2579,14 @@ void QDepthmapView::OutputSVG( ofstream& stream, QGraphDoc *pDoc )
             OutputSVGPoly(stream, shape, logicalviewport, h);
          }
       }
-      stream << "</g>" << endl;
+      stream << "</g>" << std::endl;
    }
 
-   stream << "</svg>" << endl;
+   stream << "</svg>" << std::endl;
 }
 
 
-void QDepthmapView::OutputSVGMap(ofstream& stream, ShapeMap& map, QtRegion& logicalviewport, int h)
+void QDepthmapView::OutputSVGMap(std::ofstream& stream, ShapeMap& map, QtRegion& logicalviewport, int h)
 {
    bool monochrome = (map.getDisplayParams().colorscale == DisplayParams::MONOCHROME);
    // monochrome not implemented yet!
@@ -2598,7 +2600,7 @@ void QDepthmapView::OutputSVGMap(ofstream& stream, ShapeMap& map, QtRegion& logi
    map.getPolygonDisplay(showlines,showfill,showcentroids);
 
    // arbitrary stroke width for now
-   stream << "<g stroke-width=\"4\">" << endl;
+   stream << "<g stroke-width=\"4\">" << std::endl;
 
    PafColor color, oldcolor;
    bool closed, oldclosed;
@@ -2614,21 +2616,21 @@ void QDepthmapView::OutputSVGMap(ofstream& stream, ShapeMap& map, QtRegion& logi
 
       if (first || color != oldcolor || closed != oldclosed) {
          if (!first) {
-            stream << "</g>" << endl;
+            stream << "</g>" << std::endl;
          }
          else {
             first = false;
          }
          if (closed) {
             if (showlines) {
-               stream << "<g fill=\"" << SVGColor(color) << "\" stroke=\"" << SVGColor(m_foreground) << "\">" << endl;
+               stream << "<g fill=\"" << SVGColor(color) << "\" stroke=\"" << SVGColor(m_foreground) << "\">" << std::endl;
             }
             else {
-               stream << "<g fill=\"" << SVGColor(color) << "\" stroke=\"none\">" << endl;
+               stream << "<g fill=\"" << SVGColor(color) << "\" stroke=\"none\">" << std::endl;
             }
          }
          else {
-            stream << "<g fill=\"none\" stroke=\"" << SVGColor(color) << "\">" << endl;
+            stream << "<g fill=\"none\" stroke=\"" << SVGColor(color) << "\">" << std::endl;
          }
          oldcolor = color;
          oldclosed = closed;
@@ -2646,13 +2648,13 @@ void QDepthmapView::OutputSVGMap(ofstream& stream, ShapeMap& map, QtRegion& logi
       }
    }
    if (!first) {
-      stream << "</g>" << endl;
+      stream << "</g>" << std::endl;
    }
 
-   stream << "</g>" << endl;
+   stream << "</g>" << std::endl;
 }
 
-void QDepthmapView::OutputSVGLine(ofstream& stream, Line& line, QtRegion& logicalviewport, int h)
+void QDepthmapView::OutputSVGLine(std::ofstream& stream, Line& line, QtRegion& logicalviewport, int h)
 {
    bool drewit = false;
    if (line.crop(logicalviewport)) {
@@ -2661,12 +2663,12 @@ void QDepthmapView::OutputSVGLine(ofstream& stream, Line& line, QtRegion& logica
       // 2.0 is about 0.1mm in a standard SVG output size
       if (dist(Point2f(start.x(), start.y()), Point2f(end.x(), end.y())) >= 2.4f) {
          stream << "<line x1=\"" << start.x() << "\" y1=\"" << start.y() << "\""
-                << " x2=\"" << end.x() << "\" y2=\"" << end.y() << "\" />" << endl;
+                << " x2=\"" << end.x() << "\" y2=\"" << end.y() << "\" />" << std::endl;
       }
    }
 }
 
-void QDepthmapView::OutputSVGPoly(ofstream& stream, const SalaShape& shape, QtRegion& logicalviewport, int h)
+void QDepthmapView::OutputSVGPoly(std::ofstream& stream, const SalaShape& shape, QtRegion& logicalviewport, int h)
 {
    QPoint bl = SVGPhysicalUnits(shape.getBoundingBox().bottom_left,logicalviewport,h);
    QPoint tr = SVGPhysicalUnits(shape.getBoundingBox().top_right,logicalviewport,h);
@@ -2678,9 +2680,11 @@ void QDepthmapView::OutputSVGPoly(ofstream& stream, const SalaShape& shape, QtRe
       // open lines are fairly easy: simply chop lines as they enter and exit
       stream << "<polyline points=\"";
       bool starter = true, drawn = false;
-      Point2f lastpoint = shape.head();
-      for (size_t i = 1; i < shape.size(); i++) {
-         Line line(lastpoint,shape[i]);
+      Point2f lastpoint = shape.m_points.front();
+      auto iter = shape.m_points.begin();
+      iter++;
+      for (; iter != shape.m_points.end(); iter++) {
+         Line line(lastpoint, *iter);
          if (line.crop(logicalviewport)) {
             // note: use t_start and t_end so that this line moves in the correct direction
             QPoint start = SVGPhysicalUnits(line.t_start(),logicalviewport,h);
@@ -2691,7 +2695,7 @@ void QDepthmapView::OutputSVGPoly(ofstream& stream, const SalaShape& shape, QtRe
                starter = false;
             }
             // 2.0 is about 0.1mm in a standard SVG output size
-            if (dist(Point2f(start.x(), start.y()), Point2f(end.x(), end.y())) >= 2.0f ||  i == shape.size() - 1) { 
+            if (dist(Point2f(start.x(), start.y()), Point2f(end.x(), end.y())) >= 2.0f ||  iter == shape.m_points.end() - 1) {
 				// also, always draw the very last point regardless of distance
                stream << end.x() << "," << end.y() << " ";
                drawn = true;
@@ -2702,11 +2706,11 @@ void QDepthmapView::OutputSVGPoly(ofstream& stream, const SalaShape& shape, QtRe
             drawn = true;
          }
          if (drawn) {
-            lastpoint = shape[i];
+            lastpoint = *iter;
             drawn = false;
          }
       }
-      stream << "\" />" << endl;
+      stream << "\" />" << std::endl;
    }
    else {
       // polygons are hard... have to work out entry and exit points to the clipping frame
@@ -2715,10 +2719,12 @@ void QDepthmapView::OutputSVGPoly(ofstream& stream, const SalaShape& shape, QtRe
       pqvector<SalaEdgeU> eus = shape.getClippingSet(logicalviewport);
       if (eus.size() == 0) {
          // this should be a shape that is entirely within the viewport:
-         QPoint last = SVGPhysicalUnits(shape[0],logicalviewport,h);
+         QPoint last = SVGPhysicalUnits(shape.m_points[0],logicalviewport,h);
          stream << last.x() << "," << last.y() << " ";
-         for (size_t i = 1; i < shape.size(); i++) {
-            QPoint next = SVGPhysicalUnits(shape[i],logicalviewport,h);
+         auto iter = shape.m_points.begin();
+         iter++;
+         for (; iter != shape.m_points.end(); iter++) {
+            QPoint next = SVGPhysicalUnits(*iter,logicalviewport,h);
             if (dist(Point2f(last.x(), last.y()), Point2f(next.x(), next.y())) >= 2.0f) {
                stream << next.x() << "," << next.y() << " ";
                last = next;
@@ -2739,10 +2745,10 @@ void QDepthmapView::OutputSVGPoly(ofstream& stream, const SalaShape& shape, QtRe
             QPoint next;
             stream << last.x() << "," << last.y() << " ";
             for (size_t i = eus[entry].index + 1; i != eus[exit].index; i++) {
-               if (i >= shape.size()) {
+               if (i >= shape.m_points.size()) {
                   i = 0;
                }
-               next = SVGPhysicalUnits(shape[i],logicalviewport,h);
+               next = SVGPhysicalUnits(shape.m_points[i],logicalviewport,h);
                if (dist(Point2f(last.x(), last.y()), Point2f(next.x(), next.y())) >= 2.0f) {
                   stream << next.x() << "," << next.y() << " ";
                   last = next;
@@ -2786,13 +2792,13 @@ void QDepthmapView::OutputSVGPoly(ofstream& stream, const SalaShape& shape, QtRe
             }
             if (breakup) {
             //if (entry + 2 < eus.size() && ccwEdgeU(eus[entry],eus[entry+1],eus[entry+2]) != shape.isCCW()) {
-               stream << "\" />" << endl;
+               stream << "\" />" << std::endl;
                stream << "<polygon points=\"";
             }
             entry += 2;
          }
       }
-      stream << "\" />" << endl;
+      stream << "\" />" << std::endl;
    }
 }
 

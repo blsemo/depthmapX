@@ -20,6 +20,9 @@
 #define __SALAPROGRAM_H__
 
 #include "genlib/stringutils.h"
+#include <vector>
+#include <set>
+#include <map>
 
 class AttributeTable;
 class PointMap;
@@ -263,7 +266,7 @@ protected:
    SalaCommand *m_parent;
    prefvec<SalaCommand> m_children;
    //
-   pqmap<std::string,int> m_var_names;
+   std::map<std::string,int> m_var_names;
    //
    Command m_command;
    int m_indent;  // vital for program flow due to Pythonesque syntax
@@ -279,7 +282,7 @@ public:
    SalaCommand() { m_program = NULL; m_parent = NULL; m_indent = 0; m_command = SC_NONE; }
    SalaCommand(SalaProgram *program, SalaCommand *parent, int indent, Command command = SC_NONE);
 protected:
-   int parse(istream& program, int line);
+   int parse(std::istream& program, int line);
    int decode(std::string string);
    int decode_member(const std::string& string, bool apply_to_this);
    void pushFunc(const SalaObj& func);
@@ -308,10 +311,10 @@ class SalaProgram
 public:
    SalaProgram(SalaObj context);
    ~SalaProgram();
-   bool parse(istream& program);
+   bool parse(std::istream& program);
    SalaObj evaluate();
-   bool runupdate(int col, const pvecint& selset = pvecint());
-   bool runselect(pvecint& selsetout, const pvecint& selsetin = pvecint());
+   bool runupdate(int col, const std::set<int> &selset = std::set<int>());
+   bool runselect(std::vector<int>& selsetout, const std::set<int> &selsetin = std::set<int>());
    std::string getLastErrorMessage() const;
 };
 

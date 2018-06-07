@@ -48,36 +48,36 @@ TEST_CASE("Test SuperSpacePixel construction", "")
         Point2f lineStart(0,0);
         Point2f lineEnd(2,4);
 
-        Point2f bottomLeft(min(lineStart.x,lineEnd.x),min(lineStart.y,lineEnd.y));
-        Point2f topRight(max(lineStart.x,lineEnd.x),max(lineStart.y,lineEnd.y));
+        Point2f bottomLeft(std::min(lineStart.x,lineEnd.x),std::min(lineStart.y,lineEnd.y));
+        Point2f topRight(std::max(lineStart.x,lineEnd.x),std::max(lineStart.y,lineEnd.y));
 
         // push a SpacePixelFile in the SuperSpacePixel
-        spacePixel->push_back(SpacePixelFile("Test SpacePixelGroup"));
+        spacePixel->m_spacePixels.emplace_back("Test SpacePixelGroup");
 
         // push a ShapeMap in the SpacePixelFile
-        spacePixel->tail().push_back(ShapeMap("Test ShapeMap"));
+        spacePixel->m_spacePixels.back().m_spacePixels.emplace_back("Test ShapeMap");
 
         // add a line to the ShapeMap
-        spacePixel->tail().tail().makeLineShape(Line(lineStart, lineEnd));
+        spacePixel->m_spacePixels.back().m_spacePixels.back().makeLineShape(Line(lineStart, lineEnd));
 
         // check if the ShapeMap bounds are set correctly
-        REQUIRE(spacePixel->tail().tail().getRegion().bottom_left.x == Approx(bottomLeft.x).epsilon(EPSILON));
-        REQUIRE(spacePixel->tail().tail().getRegion().bottom_left.y == Approx(bottomLeft.y).epsilon(EPSILON));
-        REQUIRE(spacePixel->tail().tail().getRegion().top_right.x == Approx(topRight.x).epsilon(EPSILON));
-        REQUIRE(spacePixel->tail().tail().getRegion().top_right.y == Approx(topRight.y).epsilon(EPSILON));
+        REQUIRE(spacePixel->m_spacePixels.back().m_spacePixels.back().getRegion().bottom_left.x == Approx(bottomLeft.x).epsilon(EPSILON));
+        REQUIRE(spacePixel->m_spacePixels.back().m_spacePixels.back().getRegion().bottom_left.y == Approx(bottomLeft.y).epsilon(EPSILON));
+        REQUIRE(spacePixel->m_spacePixels.back().m_spacePixels.back().getRegion().top_right.x == Approx(topRight.x).epsilon(EPSILON));
+        REQUIRE(spacePixel->m_spacePixels.back().m_spacePixels.back().getRegion().top_right.y == Approx(topRight.y).epsilon(EPSILON));
 
         // SpacePixelGroup (and thus SuperSpacePixel and SpacePixelFile)
         // does not automatically grow its region when a new shapemap/file
         // is added to it therefore we have to do this externally
-        spacePixel->tail().m_region = spacePixel->tail().tail().getRegion();
+        spacePixel->m_spacePixels.back().m_region = spacePixel->m_spacePixels.back().m_spacePixels.back().getRegion();
 
         // check if the SpacePixelFile bounds are set correctly
-        REQUIRE(spacePixel->tail().m_region.bottom_left.x == Approx(bottomLeft.x).epsilon(EPSILON));
-        REQUIRE(spacePixel->tail().m_region.bottom_left.y == Approx(bottomLeft.y).epsilon(EPSILON));
-        REQUIRE(spacePixel->tail().m_region.top_right.x == Approx(topRight.x).epsilon(EPSILON));
-        REQUIRE(spacePixel->tail().m_region.top_right.y == Approx(topRight.y).epsilon(EPSILON));
+        REQUIRE(spacePixel->m_spacePixels.back().m_region.bottom_left.x == Approx(bottomLeft.x).epsilon(EPSILON));
+        REQUIRE(spacePixel->m_spacePixels.back().m_region.bottom_left.y == Approx(bottomLeft.y).epsilon(EPSILON));
+        REQUIRE(spacePixel->m_spacePixels.back().m_region.top_right.x == Approx(topRight.x).epsilon(EPSILON));
+        REQUIRE(spacePixel->m_spacePixels.back().m_region.top_right.y == Approx(topRight.y).epsilon(EPSILON));
 
-        spacePixel->m_region = spacePixel->tail().m_region;
+        spacePixel->m_region = spacePixel->m_spacePixels.back().m_region;
 
         // check if the SuperSpacePixel bounds are set correctly
         REQUIRE(spacePixel->m_region.bottom_left.x == Approx(bottomLeft.x).epsilon(EPSILON));
@@ -322,9 +322,9 @@ TEST_CASE("Quirks in grid creation - Origin always at 0", "")
     REQUIRE(pointsMade);
 }
 
-TEST_CASE("Test PointMap connections output", "")
+TEST_CASE("PointMap copy, assign and add to vector")
 {
-    const float EPSILON = 0.001;
+    const double EPSILON = 0.001;
     double spacing = 0.5;
     Point2f offset(0,0); // seems that this is always set to 0,0
 
@@ -341,14 +341,14 @@ TEST_CASE("Test PointMap connections output", "")
     Point2f line3Start(rectSize,0);
     Point2f line3End(0,0);
 
-    spacePixel->push_back(SpacePixelFile("Test SpacePixelGroup"));
-    spacePixel->tail().push_back(ShapeMap("Test ShapeMap"));
-    spacePixel->tail().tail().makeLineShape(Line(line0Start, line0End));
-    spacePixel->tail().tail().makeLineShape(Line(line1Start, line1End));
-    spacePixel->tail().tail().makeLineShape(Line(line2Start, line2End));
-    spacePixel->tail().tail().makeLineShape(Line(line3Start, line3End));
-    spacePixel->tail().m_region = spacePixel->tail().tail().getRegion();
-    spacePixel->m_region = spacePixel->tail().m_region;
+    spacePixel->m_spacePixels.emplace_back("Test SpacePixelGroup");
+    spacePixel->m_spacePixels.back().m_spacePixels.emplace_back("Test ShapeMap");
+    spacePixel->m_spacePixels.back().m_spacePixels.back().makeLineShape(Line(line0Start, line0End));
+    spacePixel->m_spacePixels.back().m_spacePixels.back().makeLineShape(Line(line1Start, line1End));
+    spacePixel->m_spacePixels.back().m_spacePixels.back().makeLineShape(Line(line2Start, line2End));
+    spacePixel->m_spacePixels.back().m_spacePixels.back().makeLineShape(Line(line3Start, line3End));
+    spacePixel->m_spacePixels.back().m_region = spacePixel->m_spacePixels.back().m_spacePixels.back().getRegion();
+    spacePixel->m_region = spacePixel->m_spacePixels.back().m_region;
     PointMap pointMap("Test PointMap");
     bool spacePixelSet = pointMap.setSpacePixel(spacePixel.get());
 
@@ -372,6 +372,95 @@ TEST_CASE("Test PointMap connections output", "")
     bool graphMade = pointMap.sparkGraph2(comm.get(), boundaryGraph, maxDist);
 
     REQUIRE(graphMade);
+
+    std::vector<PointMap> pointmaps;
+    pointmaps.push_back(pointMap);
+    REQUIRE(pointmaps.size() == 1);
+
+    PointMap assignedPointMap("Assigned PointMap");
+    REQUIRE(assignedPointMap.getName() == "Assigned PointMap");
+
+    assignedPointMap = pointMap;
+    REQUIRE(assignedPointMap.getName() == pointMap.getName());
+    pointmaps.push_back(assignedPointMap);
+    REQUIRE(pointmaps.size() == 2);
+
+    PointMap copiedPointMap(pointMap);
+    REQUIRE(copiedPointMap.getName() == pointMap.getName());
+    pointmaps.push_back(copiedPointMap);
+    REQUIRE(pointmaps.size() == 3);
+}
+
+TEST_CASE("Test PointMap connections output", "")
+{
+    const float EPSILON = 0.001;
+    double spacing = 0.5;
+    Point2f offset(0,0); // seems that this is always set to 0,0
+
+    std::unique_ptr<SuperSpacePixel> spacePixel(new SuperSpacePixel("Test SuperSpacePixel"));
+
+    double rectSize = 1.5;
+
+    Point2f line0Start(0,0);
+    Point2f line0End(0,rectSize);
+    Point2f line1Start(0,rectSize);
+    Point2f line1End(rectSize,rectSize);
+    Point2f line2Start(rectSize,rectSize);
+    Point2f line2End(rectSize,0);
+    Point2f line3Start(rectSize,0);
+    Point2f line3End(0,0);
+
+    spacePixel->m_spacePixels.emplace_back("Test SpacePixelGroup");
+    spacePixel->m_spacePixels.back().m_spacePixels.emplace_back("Test ShapeMap");
+    spacePixel->m_spacePixels.back().m_spacePixels.back().makeLineShape(Line(line0Start, line0End));
+    spacePixel->m_spacePixels.back().m_spacePixels.back().makeLineShape(Line(line1Start, line1End));
+    spacePixel->m_spacePixels.back().m_spacePixels.back().makeLineShape(Line(line2Start, line2End));
+    spacePixel->m_spacePixels.back().m_spacePixels.back().makeLineShape(Line(line3Start, line3End));
+    spacePixel->m_spacePixels.back().m_region = spacePixel->m_spacePixels.back().m_spacePixels.back().getRegion();
+    spacePixel->m_region = spacePixel->m_spacePixels.back().m_region;
+    PointMap pointMap("Test PointMap");
+    bool spacePixelSet = pointMap.setSpacePixel(spacePixel.get());
+
+
+
+    Point2f gridBottomLeft = pointMap.getRegion().bottom_left;
+
+    Point2f midPoint(gridBottomLeft.x + spacing * (floor(pointMap.getCols() * 0.5) + 0.5),
+                     gridBottomLeft.y + spacing * (floor(pointMap.getRows() * 0.5) + 0.5));
+
+    int fill_type = 0; // = QDepthmapView::FULLFILL
+    bool gridIsSet = pointMap.setGrid(spacing, offset);
+
+    bool pointsMade = pointMap.makePoints(midPoint, fill_type);
+
+    bool boundaryGraph = false;
+    double maxDist = -1;
+    // a communicator is required in order to create the connections between the pixels
+    std::unique_ptr<Communicator> comm(new ICommunicator());
+
+    bool graphMade = pointMap.sparkGraph2(comm.get(), boundaryGraph, maxDist);
+
+    REQUIRE(graphMade);
+
+    SECTION("PointMap::outputLinksAsCSV") {
+        std::stringstream stream;
+        pointMap.mergePixels(65537, 131074);
+        pointMap.mergePixels(131073, 65538);
+        pointMap.outputLinksAsCSV(stream);
+
+        REQUIRE(stream.good());
+        char line[1000];
+        std::vector<std::string> lines;
+        while( !stream.eof())
+        {
+            stream.getline(line, 1000);
+            lines.push_back(line);
+        }
+        std::vector<std::string> expected{ "RefFrom,RefTo",
+                                           "65537,131074",
+                                           "65538,131073"};
+        REQUIRE(lines == expected);
+    }
 
     SECTION("PointMap::outputConnectionsAsCSV") {
         std::stringstream stream;
@@ -444,4 +533,101 @@ TEST_CASE("Test PointMap connections output", "")
         REQUIRE(lines == expected);
     }
 
+}
+TEST_CASE("Direct pointmap linking - fully filled grid (no geometry)", "")
+{
+    double spacing = 0.5;
+    Point2f offset(0,0); // seems that this is always set to 0,0
+    Point2f bottomLeft(0,0);
+    Point2f topRight(2,4);
+    int fill_type = 0; // = QDepthmapView::FULLFILL
+
+    std::unique_ptr<SuperSpacePixel> spacePixel(new SuperSpacePixel("Test SuperSpacePixel"));
+    spacePixel->m_region = QtRegion(bottomLeft, topRight);
+    PointMap pointMap("Test PointMap");
+    pointMap.setSpacePixel(spacePixel.get());
+    pointMap.setGrid(spacing, offset);
+    Point2f gridBottomLeft = pointMap.getRegion().bottom_left;
+    Point2f midPoint(gridBottomLeft.x + spacing * (floor(pointMap.getCols() * 0.5) + 0.5),
+                         gridBottomLeft.y + spacing * (floor(pointMap.getRows() * 0.5) + 0.5));
+    pointMap.makePoints(midPoint, fill_type);
+
+    std::vector<Line> mergeLines;
+
+    PixelRef bottomLeftPixel = pointMap.pixelate(bottomLeft);
+    PixelRef topRightPixel = pointMap.pixelate(topRight);
+
+    // make sure pixels are not already merged
+    REQUIRE(!pointMap.isPixelMerged(bottomLeftPixel));
+    REQUIRE(!pointMap.isPixelMerged(topRightPixel));
+
+    // merge
+    pointMap.mergePixels(bottomLeftPixel, topRightPixel);
+
+    // make sure pixels are merged
+    REQUIRE(pointMap.isPixelMerged(bottomLeftPixel));
+    REQUIRE(pointMap.isPixelMerged(topRightPixel));
+
+    SECTION ("Make sure we get the correct number of merged pixel pairs")
+    {
+        const std::vector<std::pair<PixelRef, PixelRef>> &pixelPairs = pointMap.getMergedPixelPairs();
+        REQUIRE(pixelPairs.size() == 1);
+        REQUIRE(pixelPairs[0].first == bottomLeftPixel);
+        REQUIRE(pixelPairs[0].second == topRightPixel);
+    }
+
+    SECTION ("Overwrite the pixelpair by re-merging the first pixel of the pair")
+    {
+        PixelRef aboveBottomLeftPixel = pointMap.pixelate(Point2f(bottomLeft.x, bottomLeft.y + 1));
+
+        // merge
+        pointMap.mergePixels(aboveBottomLeftPixel, topRightPixel);
+
+        // make sure pixels are merged
+        REQUIRE(pointMap.isPixelMerged(aboveBottomLeftPixel));
+        REQUIRE(pointMap.isPixelMerged(topRightPixel));
+
+        // and previous pixel is not merged any more
+        REQUIRE(!pointMap.isPixelMerged(bottomLeftPixel));
+
+        // make sure we get the correct number of merged pixel pairs
+        const std::vector<std::pair<PixelRef, PixelRef>> &pixelPairs = pointMap.getMergedPixelPairs();
+        REQUIRE(pixelPairs.size() == 1);
+        REQUIRE(pixelPairs[0].first == aboveBottomLeftPixel);
+        REQUIRE(pixelPairs[0].second == topRightPixel);
+    }
+
+    SECTION ("Overwrite the pixelpair by re-merging the second pixel of the pair")
+    {
+        PixelRef belowTopRightPixel = pointMap.pixelate(Point2f(topRight.x, topRight.y - 1));
+
+        // merge
+        pointMap.mergePixels(bottomLeftPixel, belowTopRightPixel);
+
+        // make sure pixels are merged
+        REQUIRE(pointMap.isPixelMerged(bottomLeftPixel));
+        REQUIRE(pointMap.isPixelMerged(belowTopRightPixel));
+
+        // and previous pixel is not merged any more
+        REQUIRE(!pointMap.isPixelMerged(topRightPixel));
+
+        // make sure we get the correct number of merged pixel pairs
+        const std::vector<std::pair<PixelRef, PixelRef>> &pixelPairs2 = pointMap.getMergedPixelPairs();
+        REQUIRE(pixelPairs2.size() == 1);
+        REQUIRE(pixelPairs2[0].first == bottomLeftPixel);
+        REQUIRE(pixelPairs2[0].second == belowTopRightPixel);
+    }
+
+    SECTION ("Merge the same pixel twice to erase the pair")
+    {
+        pointMap.mergePixels(bottomLeftPixel, bottomLeftPixel);
+
+        // make sure no pixel is merged
+        REQUIRE(!pointMap.isPixelMerged(bottomLeftPixel));
+        REQUIRE(!pointMap.isPixelMerged(topRightPixel));
+
+        // make sure we get the correct number of merged pixel pairs
+        const std::vector<std::pair<PixelRef, PixelRef>> &pixelPairs3 = pointMap.getMergedPixelPairs();
+        REQUIRE(pixelPairs3.size() == 0);
+    }
 }

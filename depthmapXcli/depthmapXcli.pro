@@ -18,7 +18,8 @@ SOURCES += main.cpp \
     agentparser.cpp \
     isovistparser.cpp \
     exportparser.cpp \
-    importparser.cpp
+    importparser.cpp \
+    stepdepthparser.cpp
 
 HEADERS += \
     commandlineparser.h \
@@ -39,10 +40,11 @@ HEADERS += \
     agentparser.h \
     isovistparser.h \
     exportparser.h \
-    importparser.h
+    importparser.h \
+    stepdepthparser.h
 
-win32:Release:LIBS += -L../genlib/release -L../salalib/release
-win32:Debug:LIBS += -L../genlib/debug -L../salalib/debug
-!win32:LIBS += -L../genlib -L../salalib
+win32:Release:LIBS += -L../genlib/release -L../mgraph440/release -L../salalib/release
+win32:Debug:LIBS += -L../genlib/debug -L../mgraph440/debug -L../salalib/debug
+!win32:LIBS += -L../genlib -L../mgraph440 -L../salalib
 
-LIBS += -lsalalib -lgenlib
+LIBS += -lsalalib -lmgraph440 -lgenlib
