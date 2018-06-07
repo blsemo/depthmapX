@@ -478,13 +478,6 @@ int ShapeMap::makeShape(const SalaShape& poly, int override_shape_ref)
 
    int rowid2 = m_attributes.insertRow(shape_ref);
 
-#ifdef _DEBUG
-   if (rowid1 != rowid2) {
-      // rowids should match, they're both pqmaps, but if someone is stupid enough to change it, they'll know pretty quickly:
-      throw depthmapX::RuntimeException("Arrrrgghhh: important! insertRow does not index in the same way as add shapes, this will badly mess up the system!");
-   }
-#endif
-
    m_newshape = true;
 
    return shape_ref;

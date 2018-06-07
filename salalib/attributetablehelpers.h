@@ -16,7 +16,8 @@
 #pragma once
 #include "attributetable.h"
 #include "attributetableview.h"
-#include "vertex.h"
+#include "pafcolor.h"
+#include "mgraph_consts.h"
 
 namespace dXreimpl{
     template<typename RowKeyType>

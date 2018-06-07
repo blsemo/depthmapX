@@ -16,7 +16,6 @@
 
 #pragma once
 #include "layermanager.h"
-#include "vertex.h"
 #include <string>
 #include <map>
 #include <vector>
@@ -24,6 +23,7 @@
 #include <sstream>
 #include <iterator>
 #include <algorithm>
+#include <salalib/displayparams.h>
 
 
 namespace dXreimpl
@@ -606,10 +606,7 @@ namespace dXreimpl
     template<typename RowKeyType>
     void AttributeTable<RowKeyType>::read(std::istream &stream, LayerManager &layerManager, int version)
     {
-        if (version >= VERSION_MAP_LAYERS )
-        {
-            layerManager.read(stream);
-        }
+        layerManager.read(stream);
         int colcount;
         stream.read((char *)&colcount, sizeof(colcount));
         std::map<size_t, AttributeColumnImpl> tmp;
@@ -632,11 +629,8 @@ namespace dXreimpl
            m_rows.insert(std::make_pair(rowkey,std::move(row)));
         }
 
-        if (version >= VERSION_GATE_MAPS) {
-           // ref column display params
-           stream.read((char *)&m_displayParams,sizeof(DisplayParams));
-        }
-
+       // ref column display params
+       stream.read((char *)&m_displayParams,sizeof(DisplayParams));
     }
 
     template<typename RowKeyType>

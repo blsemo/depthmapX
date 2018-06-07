@@ -477,7 +477,7 @@ TEST_CASE("Attribute Table - serialisation")
 
     AttributeTable oldTable;
     {
-        ifstream infile(newTableFile.Filename());
+        std::ifstream infile(newTableFile.Filename());
         oldTable.read(infile, METAGRAPH_VERSION);
     }
 

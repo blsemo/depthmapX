@@ -15,7 +15,7 @@
 
 
 #include "attributetable.h"
-#include "vertex.h" // required for DisplayParams. Blergh!
+#include "displayparams.h"
 #include <genlib/stringutils.h>
 #include <genlib/vectorhelpers.h>
 
@@ -83,7 +83,7 @@ void dXreimpl::AttributeColumnImpl::setName(const std::string &name)
     m_name = name;
 }
 
-size_t dXreimpl::AttributeColumnImpl::read(istream &stream, int version)
+size_t dXreimpl::AttributeColumnImpl::read(std::istream &stream, int version)
 {
     m_name = dXstring::readString(stream);
     float val;
@@ -91,40 +91,14 @@ size_t dXreimpl::AttributeColumnImpl::read(istream &stream, int version)
     m_stats.min = val;
     stream.read((char *)&val, sizeof(float));
     m_stats.max = val;
-    if(version >= VERSION_ATTRIBUTES_TABLE)
-    {
-        stream.read((char *)&m_stats.total, sizeof(double));
-    }
-    else
-    {
-        m_stats.total = 0.0;
-    }
+    stream.read((char *)&m_stats.total, sizeof(double));
     int physical_column;
     stream.read((char *)&physical_column, sizeof(int)); // physical column is obsolete
     stream.read((char *)&m_hidden, sizeof(bool));
-    if (version >= VERSION_ATTRIBUTE_LOCKING)
-    {
-        stream.read((char *)&m_locked, sizeof(bool));
-    }
-    else
-    { // legacy reading shit - we probably need to keep it because someone will want to revisit their Depthmap files from 2001 at some point
-        if (m_name == "Connectivity" || m_name == "Connectivity (Degree)" || m_name == "Axial Line Ref" || m_name == "Segment Length" || m_name == "Line Length") {
-           m_locked = true;
-        }
-        else {
-           m_locked = false;
-        }
-    }
+    stream.read((char *)&m_locked, sizeof(bool));
 
-    if (version >= VERSION_STORE_COLOR) {
-        stream.read((char*)&m_displayParams,sizeof(DisplayParams));
-    }
-    if (version >= VERSION_STORE_FORMULA) {
-       m_formula = dXstring::readString(stream);
-    }
-    if (version >= VERSION_STORE_COLUMN_CREATOR && version < VERSION_FORGET_COLUMN_CREATOR) {
-       std::string dummy_creator = dXstring::readString(stream);
-    }
+    stream.read((char*)&m_displayParams,sizeof(DisplayParams));
+    m_formula = dXstring::readString(stream);
     return physical_column;
 }
 
@@ -208,16 +182,13 @@ void dXreimpl::AttributeRowImpl::removeColumn(size_t index)
     m_data.erase(m_data.begin() + index);
 }
 
-void dXreimpl::AttributeRowImpl::read(istream &stream, int version)
+void dXreimpl::AttributeRowImpl::read(std::istream &stream, int version)
 {
-    if( version > VERSION_MAP_LAYERS)
-    {
-        stream.read((char *)&m_layerKey, sizeof(m_layerKey));
-    }
+    stream.read((char *)&m_layerKey, sizeof(m_layerKey));
     dXvector::readIntoVector(stream, m_data);
 }
 
-void dXreimpl::AttributeRowImpl::write(ostream &stream)
+void dXreimpl::AttributeRowImpl::write(std::ostream &stream)
 {
     stream.write((char *)&m_layerKey, sizeof(m_layerKey));
     dXvector::writeVector(stream, m_data);
@@ -249,7 +220,7 @@ dXreimpl::AttributeRow &dXreimpl::AttributeRowImpl::incrValue(size_t index, floa
 }
 
 
-dXreimpl::AttributeRow &dXreimpl::AttributeRowImpl::incrValue(const string &colName, float value)
+dXreimpl::AttributeRow &dXreimpl::AttributeRowImpl::incrValue(const std::string &colName, float value)
 {
     return incrValue(m_colManager.getColumnIndex(colName), value);
 }
