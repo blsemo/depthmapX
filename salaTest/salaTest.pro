@@ -22,7 +22,6 @@ SOURCES += main.cpp \
     testattributetableview.cpp \
     testshapemaps.cpp \
     testgeometrygenerators.cpp \
-    testsparksieve.cpp \
     testmapinfodata.cpp
 
 win32:Release:LIBS += -L../genlib/release -L../mgraph440/release -L../salalib/release
