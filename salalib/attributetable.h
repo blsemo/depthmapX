@@ -24,6 +24,7 @@
 #include <iterator>
 #include <algorithm>
 #include <salalib/displayparams.h>
+#include <salalib/mgraph_consts.h>
 
 
 namespace dXreimpl
