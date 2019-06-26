@@ -59,19 +59,13 @@ bool VGAMetric::run(Communicator *comm, const Options &options, PointMap &map, b
             PixelRef curs = PixelRef(static_cast<short>(i), static_cast<short>(j));
 
             if (map.getPoint(curs).filled()) {
-
                 if (options.gates_only) {
                     count++;
                     continue;
                 }
 
-                // TODO: Break out miscs/dist/cumangle into local variables and remove from Point class
-                for (auto &point : map.getPoints()) {
-                    point.m_misc = 0;
-                    point.m_dist = -1.0f;
-                    point.m_cumangle = 0.0f;
-                }
-
+				depthmapX::RowMatrix<MetricMetadata> metaData(map.getCols(), map.getRows());
+				
                 float euclid_depth = 0.0f;
                 float total_depth = 0.0f;
                 float total_angle = 0.0f;
@@ -90,21 +84,23 @@ bool VGAMetric::run(Communicator *comm, const Options &options, PointMap &map, b
                         break;
                     }
                     Point &p = map.getPoint(here.pixel);
-                    // nb, the filled check is necessary as diagonals seem to be stored with 'gaps' left in
-                    if (p.filled() && p.m_misc != ~0) {
-                        p.getNode().extractMetric(search_list, &map, here);
-                        p.m_misc = ~0;
+					auto &hereData = metaData(here.pixel.x, here.pixel.y);
+					// nb, the filled check is necessary as diagonals seem to be stored with 'gaps' left in
+					if (p.filled() && !hereData.processed) {
+                        p.getNode().extractMetric(search_list, map, here, metaData);
+						hereData.processed=true;
                         if (!p.getMergePixel().empty()) {
-                            Point &p2 = map.getPoint(p.getMergePixel());
-                            if (p2.m_misc != ~0) {
-                                p2.m_cumangle = p.m_cumangle;
-                                p2.getNode().extractMetric(search_list, &map,
-                                                           MetricTriple(here.dist, p.getMergePixel(), NoPixel));
-                                p2.m_misc = ~0;
+							auto& mergePixel = p.getMergePixel();
+							auto& mergeData = metaData(mergePixel.x, mergePixel.y);
+                            if (!mergeData.processed) {
+                                mergeData.cumAngle = p.m_cumangle;
+                                map.getPoint(mergePixel).getNode().extractMetric(search_list, map,
+                                                           MetricTriple(here.dist, p.getMergePixel(), NoPixel), metaData);
+								mergeData.processed = true;
                             }
                         }
                         total_depth += float(here.dist * map.getSpacing());
-                        total_angle += p.m_cumangle;
+						total_angle += hereData.cumAngle;
                         euclid_depth += float(map.getSpacing() * dist(here.pixel, curs));
                         total_nodes += 1;
                     }

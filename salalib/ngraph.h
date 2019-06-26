@@ -20,8 +20,10 @@
 #pragma once
 
 #include "salalib/pixelref.h"
+#include "genlib/simplematrix.h"
 
 #include <set>
+#include <map>
 
 class PointMap;
 struct MetricPair;
@@ -45,6 +47,13 @@ struct PixelVec
    std::ostream &write(std::ostream &stream, const char dir, const PixelVec& context);
 };
 
+struct MetricMetadata {
+	MetricMetadata() : processed(false), pointDist(-1.0f), cumAngle(0.0f) {}
+	bool processed;
+	float pointDist;
+	float cumAngle;
+};
+
 class Bin
 {
    friend class Node;
@@ -61,6 +70,7 @@ public:
    void make(const PixelRefVector& pixels, char m_dir);
    void extractUnseen(PixelRefVector& pixels, PointMap *pointdata, int binmark);
    void extractMetric(std::set<MetricTriple> &pixels, PointMap *pointdata, const MetricTriple& curs);
+   void extractMetric(std::set<MetricTriple> &pixels, const MetricTriple& curs, depthmapX::BaseMatrix<MetricMetadata> &metaData);
    void extractAngular(std::set<AngularTriple> &pixels, PointMap *pointdata, const AngularTriple& curs);
    //
    int count() const 
@@ -106,6 +116,7 @@ public:
    void make(const PixelRef pix, PixelRefVector *bins, float *bin_far_dists, int q_octants);
    void extractUnseen(PixelRefVector& pixels, PointMap *pointdata, int binmark);
    void extractMetric(std::set<MetricTriple> &pixels, PointMap *pointdata, const MetricTriple& curs);
+   void extractMetric(std::set<MetricTriple> &pixels, const PointMap &pointdata, const MetricTriple& curs, depthmapX::BaseMatrix<MetricMetadata> &metadata);
    void extractAngular(std::set<AngularTriple> &pixels, PointMap *pointdata, const AngularTriple& curs);
    bool concaveConnected();
    bool fullyConnected();

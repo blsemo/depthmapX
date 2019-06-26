@@ -16,6 +16,8 @@
 #include "catch.hpp"
 #include <genlib/containerutils.h>
 #include <vector>
+#include <set>
+#include <map>
 
 
 TEST_CASE("Test binary search helper with container", ""){
@@ -32,4 +34,17 @@ TEST_CASE("Test binary search helper with container", ""){
     REQUIRE(*depthmapX::findBinary(constVec, 3) == 3);
     REQUIRE(depthmapX::findBinary(constVec, 2) == testVec.end());
     REQUIRE(depthmapX::findBinary(constVec, 6) == testVec.end());
+}
+
+TEST_CASE("Test contains()") {
+	std::set<int> testSet{ 1,2,4,5 };
+	std::vector<int> testVec{ 1, 2, 4, 5 };
+	std::map<int, int> testMap{ {1,1}, {2,3}, {4, 27}, {5, 1} };
+
+	REQUIRE(depthmapX::contains(testSet, 2));
+	REQUIRE_FALSE(depthmapX::contains(testSet, 3));
+	REQUIRE(depthmapX::contains(testVec, 2));
+	REQUIRE_FALSE(depthmapX::contains(testVec, 3));
+	REQUIRE(depthmapX::contains(testMap, 2));
+	REQUIRE_FALSE(depthmapX::contains(testMap, 3));
 }

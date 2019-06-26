@@ -77,6 +77,17 @@ void Node::extractMetric(std::set<MetricTriple>& pixels, PointMap *pointdata, co
    }
 }
 
+// second version that doesn't use point to store temporaries
+void Node::extractMetric(std::set<MetricTriple>& pixels, const PointMap &pointdata, const MetricTriple& curs, depthmapX::BaseMatrix<MetricMetadata> &metaData)
+{
+	if (curs.dist == 0.0f || pointdata.getPoint(curs.pixel).blocked() || pointdata.blockedAdjacent(curs.pixel)) {
+		for (int i = 0; i < 32; i++) {
+			m_bins[i].extractMetric(pixels, curs, metaData);
+		}
+	}
+}
+
+
 // based on extract metric
 
 void Node::extractAngular(std::set<AngularTriple>& pixels, PointMap *pointdata, const AngularTriple& curs)
@@ -344,6 +355,27 @@ void Bin::extractMetric(std::set<MetricTriple>& pixels, PointMap *pointdata, con
          pix.move(m_dir);
       }
    }
+}
+
+
+void Bin::extractMetric(std::set<MetricTriple>& pixels, const MetricTriple& curs, depthmapX::BaseMatrix<MetricMetadata> &metaData)
+{
+	auto &curData = metaData(curs.pixel.x, curs.pixel.y);
+	for (auto pixVec : m_pixel_vecs) {
+		for (PixelRef pix = pixVec.start(); pix.col(m_dir) <= pixVec.end().col(m_dir); ) {
+			auto &pxData = metaData(pix.x, pix.y);
+			if (!pxData.processed) {
+				float currentDistance = curs.dist + (float)dist(pix, curs.pixel);
+				if (pxData.pointDist == -1.0f || currentDistance < pxData.pointDist) {
+					pxData.pointDist = currentDistance;
+					// n.b. dmap v4.06r now sets angle in range 0 to 4 (1 = 90 degrees)
+					pxData.cumAngle = curData.cumAngle + (curs.lastpixel == NoPixel ? 0.0f : (float)(angle(pix, curs.pixel, curs.lastpixel) / (M_PI * 0.5)));
+					pixels.insert(MetricTriple(pxData.pointDist, pix, curs.pixel));
+				}
+			}
+			pix.move(m_dir);
+		}
+	}
 }
 
 // based on metric

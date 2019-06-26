@@ -10,3 +10,20 @@ depthmapX.pro.user
 *_LOCAL_*
 *_REMOTE_*
 
+/build-x64
+/cmake-build-debug
+/cmake_build
+/cmake_linux
+/depthmapX/version_defs.hn
+/depthmapX/version_defs.h
+/depthmapX/versions.h
+/depthmapX/test.bat
+/GuiApp
+/linux_clang
+/linux_gcc
+/qmake_linux
+/RegressionTest
+*.autosave
+/vsbuild
+/graph.grammar
+/depthmapX.pro.user.8c5835f

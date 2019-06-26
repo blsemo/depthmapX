@@ -4,7 +4,19 @@ set(genlib_SRCS
     p2dpoly.cpp  
     pafmath.cpp  
     stringutils.cpp  
-    xmlparse.cpp)
+    xmlparse.cpp
+	bsptree.h
+	linreg.h
+	readwritehelpers.h
+	comm.h
+	p2dpoly.h
+	simplematrix.h
+	containerutils.h 
+	pafmath.h
+	stringutils.h
+	exceptions.h
+	pflipper.h
+	xmlparse.h)
 
 add_compile_definitions(GENLIB_LIBRARY)
 
