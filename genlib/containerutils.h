@@ -86,12 +86,10 @@ namespace depthmapX {
     }
 
 	template <typename ValueType, typename ContainerType> bool contains(ContainerType const &container, ValueType const &value) {
-		auto& iter = std::find(container.begin(), container.end(), value);
-		return iter != container.end();
+		return std::find(container.begin(), container.end(), value) != container.end();
 	}
 
 	template <typename KeyType, typename ValueType> bool contains(std::map<KeyType, ValueType> const & map, KeyType const &value) {
-		auto& iter = map.find(value);
-		return iter != map.end();
+		return map.find(value) != map.end();
 	}
 } // namespace depthmapX

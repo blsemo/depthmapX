@@ -90,7 +90,7 @@ bool VGAMetric::run(Communicator *comm, const Options &options, PointMap &map, b
                         p.getNode().extractMetric(search_list, map, here, metaData);
 						hereData.processed=true;
                         if (!p.getMergePixel().empty()) {
-							auto& mergePixel = p.getMergePixel();
+							auto mergePixel = p.getMergePixel();
 							auto& mergeData = metaData(mergePixel.x, mergePixel.y);
                             if (!mergeData.processed) {
                                 mergeData.cumAngle = p.m_cumangle;
