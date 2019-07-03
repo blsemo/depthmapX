@@ -382,14 +382,13 @@ struct MetricTriple
    {
       dist = d; pixel = p; lastpixel = lp;
    }
-   friend bool operator == (const MetricTriple& mp1, const MetricTriple& mp2);
    friend bool operator < (const MetricTriple& mp1, const MetricTriple& mp2);
    friend bool operator > (const MetricTriple& mp1, const MetricTriple& mp2);
    friend bool operator != (const MetricTriple& mp1, const MetricTriple& mp2);
 };
 
-inline bool operator == (const MetricTriple& mp1, const MetricTriple& mp2)
-{ return (mp1.dist == mp2.dist && mp1.pixel == mp2.pixel); }
+//inline bool operator == (const MetricTriple& mp1, const MetricTriple& mp2)
+//{ return (mp1.dist == mp2.dist && mp1.pixel == mp2.pixel); }
 inline bool operator < (const MetricTriple& mp1, const MetricTriple& mp2)
 { return (mp1.dist < mp2.dist) || (mp1.dist == mp2.dist && mp1.pixel < mp2.pixel); }
 inline bool operator > (const MetricTriple& mp1, const MetricTriple& mp2)
